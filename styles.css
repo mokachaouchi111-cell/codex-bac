@@ -84,7 +84,7 @@ body {
   margin: 0.8rem auto 1rem;
   position: relative;
   z-index: 1;
-  padding-bottom: 88px;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
 }
 
 .glass {
@@ -263,7 +263,7 @@ body {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 0.55rem;
+  bottom: calc(0.55rem + env(safe-area-inset-bottom));
   width: min(1000px, calc(100% - 1rem));
   border-radius: 16px;
   display: grid;
@@ -1331,7 +1331,7 @@ body {
 
 .toast {
   position: fixed;
-  bottom: 5.4rem;
+  bottom: calc(7.2rem + env(safe-area-inset-bottom));
   left: 50%;
   transform: translate(-50%, 170%);
   background: color-mix(in srgb, var(--bg-panel-strong) 96%, black 4%);
@@ -1340,6 +1340,11 @@ body {
   padding: 0.5rem 0.84rem;
   transition: transform 180ms ease;
   z-index: 30;
+  max-width: min(90vw, 520px);
+  text-align: center;
+  direction: rtl;
+  unicode-bidi: plaintext;
+  pointer-events: none;
 }
 
 .toast.show {
@@ -1495,9 +1500,15 @@ body {
 
   .bottom-nav {
     width: calc(100% - 0.7rem);
+    bottom: calc(0.45rem + env(safe-area-inset-bottom));
   }
 
   .nav-item small {
     font-size: 0.66rem;
+  }
+
+  .toast {
+    bottom: calc(7.8rem + env(safe-area-inset-bottom));
+    font-size: 0.95rem;
   }
 }
