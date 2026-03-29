@@ -1,4 +1,4 @@
-const CACHE = "codex-bac-v4";
+const CACHE = "codex-bac-v5";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./data.js"];
 
 self.addEventListener("install", (event) => {
