@@ -861,11 +861,19 @@ body {
 .podium-card {
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 0.56rem 0.45rem;
+  padding: 0.62rem 0.45rem;
   background: var(--bg-panel-strong);
   text-align: center;
   display: grid;
-  gap: 0.18rem;
+  gap: 0.2rem;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.podium-card > * {
+  position: relative;
+  z-index: 2;
 }
 
 .podium-card strong {
@@ -893,12 +901,13 @@ body {
 }
 
 .podium-avatar {
-  width: 40px;
-  height: 40px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
   margin: 0 auto;
   object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 4px rgba(9, 22, 40, 0.85);
 }
 
 .podium-avatar.initials {
@@ -912,12 +921,103 @@ body {
   font-size: 1.1rem;
 }
 
+.podium-aura {
+  position: absolute;
+  inset: 24% 18% 24% 18%;
+  border-radius: 999px;
+  z-index: 0;
+  background: radial-gradient(circle, rgba(132, 198, 255, 0.45) 0%, rgba(124, 196, 255, 0.08) 55%, transparent 74%);
+  filter: blur(10px);
+  opacity: 0.4;
+}
+
+.podium-wings {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wing {
+  --wing-base: scaleX(1);
+  position: absolute;
+  top: 36%;
+  width: 96px;
+  height: 82px;
+  opacity: 0.56;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(188, 226, 255, 0.9) 0 12%, rgba(123, 187, 255, 0.58) 45%, rgba(105, 166, 255, 0.1) 78%),
+    linear-gradient(160deg, rgba(115, 190, 255, 0.62), rgba(43, 105, 216, 0.08));
+  clip-path: polygon(5% 8%, 62% 0%, 100% 22%, 78% 48%, 100% 80%, 58% 100%, 0% 88%, 18% 50%);
+  transform-origin: 50% 12%;
+  transform: var(--wing-base) rotate(0deg);
+  animation: wingFallback 1.25s ease-in-out infinite alternate;
+}
+
+.wing-left {
+  left: -34px;
+}
+
+.wing-right {
+  right: -34px;
+  --wing-base: scaleX(-1);
+}
+
+.podium-wings.soft .wing {
+  opacity: 0.36;
+  filter: saturate(0.85);
+}
+
+.podium-card.place-1 .podium-wings.hero .wing {
+  opacity: 0.7;
+}
+
+.podium-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.podium-spark {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 236, 159, 0.95), rgba(124, 210, 255, 0.35));
+  opacity: 0.24;
+}
+
+.podium-spark:nth-child(1) {
+  top: 18%;
+  left: 22%;
+}
+
+.podium-spark:nth-child(2) {
+  top: 22%;
+  right: 20%;
+}
+
+.podium-spark:nth-child(3) {
+  top: 46%;
+  left: 14%;
+}
+
+.podium-spark:nth-child(4) {
+  top: 50%;
+  right: 14%;
+}
+
 .focus-zone {
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 14px;
   padding: 0.68rem;
   background: var(--bg-panel-strong);
   display: grid;
+  grid-template-columns: minmax(240px, 1.25fr) minmax(220px, 1fr);
+  align-items: center;
+  column-gap: 0.72rem;
+  row-gap: 0.56rem;
   gap: 0.56rem;
 }
 
@@ -980,6 +1080,7 @@ body {
 
 .duel-btn {
   justify-self: start;
+  grid-column: 1 / -1;
 }
 
 .challenge-list-wrap {
@@ -1620,6 +1721,15 @@ body {
   }
 }
 
+@keyframes wingFallback {
+  0% {
+    transform: var(--wing-base) rotate(0deg);
+  }
+  100% {
+    transform: var(--wing-base) rotate(12deg);
+  }
+}
+
 @keyframes flamePulse {
   0%,
   100% {
@@ -1723,6 +1833,10 @@ body {
   .focus-stats {
     grid-template-columns: 1fr;
   }
+
+  .focus-zone {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 680px) {
@@ -1765,14 +1879,45 @@ body {
     font-size: 0.95rem;
   }
 
-  .podium-grid {
-    grid-template-columns: 1fr;
+  .challenge-shell {
+    gap: 0.58rem;
   }
 
-  .podium-card.place-1,
-  .podium-card.place-2,
-  .podium-card.place-3 {
+  .podium-grid {
+    display: flex;
+    overflow-x: auto;
+    gap: 0.5rem;
+    padding: 0.06rem 0.08rem 0.22rem;
+    scroll-snap-type: x mandatory;
+  }
+
+  .podium-card {
+    min-width: 148px;
+    padding: 0.5rem 0.4rem;
+    scroll-snap-align: start;
+  }
+
+  .podium-card.place-1 {
     transform: none;
+  }
+
+  .podium-avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .wing {
+    width: 72px;
+    height: 64px;
+    top: 40%;
+  }
+
+  .wing-left {
+    left: -24px;
+  }
+
+  .wing-right {
+    right: -24px;
   }
 
   .challenge-toolbar {
@@ -1787,10 +1932,31 @@ body {
   .metric-tab {
     flex: 1;
     justify-content: center;
+    padding: 0.28rem 0.44rem;
+  }
+
+  .metric-tab small {
+    font-size: 0.69rem;
+  }
+
+  .focus-zone {
+    padding: 0.58rem;
+  }
+
+  .focus-main h3 {
+    font-size: 1.04rem;
+  }
+
+  .focus-main p {
+    font-size: 0.95rem;
   }
 
   .list-head {
     flex-direction: column;
     align-items: start;
+  }
+
+  .leaderboard.nearby {
+    max-height: 315px;
   }
 }

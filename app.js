@@ -146,6 +146,7 @@ const state = {
 };
 
 let coreReadTimer = null;
+let challengesAnimContext = null;
 
 const el = {
   topbarSubtitle: document.getElementById("topbar-subtitle"),
@@ -311,6 +312,10 @@ function onBottomNavClick(event) {
   if (!nextPage || nextPage === state.page) return;
 
   state.page = nextPage;
+  if (state.page !== "challenges" && challengesAnimContext?.revert) {
+    challengesAnimContext.revert();
+    challengesAnimContext = null;
+  }
   save(STORAGE_KEYS.page, state.page);
   if (state.page === "profile") {
     playTierSound(getUserTier().id);
@@ -1101,8 +1106,22 @@ function renderChallenges() {
       const avatar = entry.isMe && state.userPhoto
         ? `<img class="podium-avatar" src="${escapeAttr(state.userPhoto)}" alt="${escapeAttr(entry.name)}" />`
         : `<div class="podium-avatar initials">${escapeHtml(initialsFromName(entry.name))}</div>`;
+      const wingsHtml = `
+        <div class="podium-aura"></div>
+        <div class="podium-wings ${entry.rank === 1 ? "hero" : "soft"}" aria-hidden="true">
+          <span class="wing wing-left"></span>
+          <span class="wing wing-right"></span>
+        </div>
+        <div class="podium-sparks" aria-hidden="true">
+          <span class="podium-spark"></span>
+          <span class="podium-spark"></span>
+          <span class="podium-spark"></span>
+          <span class="podium-spark"></span>
+        </div>
+      `;
       return `
-        <article class="podium-card ${placeClass} ${entry.isMe ? "me" : ""}">
+        <article class="podium-card ${placeClass} ${entry.isMe ? "me" : ""}" data-podium-rank="${entry.rank}">
+          ${wingsHtml}
           <div class="podium-medal">${entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}</div>
           ${avatar}
           <strong>${escapeHtml(entry.name)}</strong>
@@ -1180,6 +1199,89 @@ function renderChallenges() {
       </section>
     </section>
   `;
+
+  if (state.page === "challenges") {
+    requestAnimationFrame(() => {
+      animateChallengePodium();
+    });
+  }
+}
+
+function animateChallengePodium() {
+  if (challengesAnimContext?.revert) {
+    challengesAnimContext.revert();
+    challengesAnimContext = null;
+  }
+
+  const gsap = window.gsap;
+  if (!gsap || !el.leaderboard) return;
+
+  challengesAnimContext = gsap.context(() => {
+    const cards = gsap.utils.toArray(".podium-card");
+    if (!cards.length) return;
+
+    gsap.fromTo(
+      cards,
+      { autoAlpha: 0, y: 26, scale: 0.96 },
+      { autoAlpha: 1, y: 0, scale: 1, duration: 0.85, stagger: 0.12, ease: "power3.out" }
+    );
+
+    cards.forEach((card, idx) => {
+      const floatAmp = card.classList.contains("place-1") ? -5 : -2;
+      gsap.to(card, {
+        y: floatAmp,
+        duration: 2 + idx * 0.25,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut"
+      });
+    });
+
+    const wings = gsap.utils.toArray(".podium-card .wing");
+    wings.forEach((wing) => {
+      const isLeft = wing.classList.contains("wing-left");
+      const fromRot = isLeft ? -8 : 8;
+      const toRot = isLeft ? -21 : 21;
+      gsap.fromTo(
+        wing,
+        { rotation: fromRot, scaleY: 1, transformOrigin: "50% 10%" },
+        {
+          rotation: toRot,
+          scaleY: 1.08,
+          duration: wing.closest(".podium-card")?.classList.contains("place-1") ? 0.9 : 1.2,
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut"
+        }
+      );
+    });
+
+    gsap.utils.toArray(".podium-aura").forEach((aura) => {
+      gsap.fromTo(
+        aura,
+        { opacity: 0.28, scale: 0.92 },
+        { opacity: 0.9, scale: 1.18, duration: 1.5, repeat: -1, yoyo: true, ease: "sine.inOut" }
+      );
+    });
+
+    gsap.utils.toArray(".podium-spark").forEach((spark, idx) => {
+      const driftX = idx % 2 === 0 ? -10 - idx * 2 : 10 + idx * 2;
+      gsap.fromTo(
+        spark,
+        { x: 0, y: 0, autoAlpha: 0.24 },
+        {
+          x: driftX,
+          y: -16 - (idx % 3) * 8,
+          autoAlpha: 0.95,
+          duration: 1.15 + (idx % 2) * 0.25,
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut",
+          delay: idx * 0.08
+        }
+      );
+    });
+  }, el.leaderboard);
 }
 
 function renderNotifications() {
