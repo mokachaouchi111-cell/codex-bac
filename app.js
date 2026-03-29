@@ -19,7 +19,8 @@ const STORAGE_KEYS = {
   eventClaims: "codex_bac_event_claims",
   dailyTasks: "codex_bac_daily_tasks",
   recoveryMission: "codex_bac_recovery_mission",
-  weeklyBoss: "codex_bac_weekly_boss"
+  weeklyBoss: "codex_bac_weekly_boss",
+  challengeMetric: "codex_bac_challenge_metric"
 };
 
 const XP_RULES = {
@@ -51,6 +52,29 @@ const WEEKLY_BOSS_RULES = {
   baseReward: 320,
   epicReward: 460,
   legendaryReward: 620
+};
+
+const CHALLENGE_METRICS = {
+  xp: {
+    label: "XP",
+    icon: "🏆",
+    unit: "XP"
+  },
+  streak: {
+    label: "الانضباط",
+    icon: "🔥",
+    unit: "يوم"
+  },
+  mastery: {
+    label: "الإتقان",
+    icon: "⚔️",
+    unit: "وحدة"
+  },
+  quiz: {
+    label: "الكويز",
+    icon: "🧠",
+    unit: "%"
+  }
 };
 
 const BACKEND_XP_ENDPOINT = window.CODEX_XP_ENDPOINT || "";
@@ -111,6 +135,7 @@ const state = {
     claimed: false
   }),
   weeklyBoss: load(STORAGE_KEYS.weeklyBoss, null),
+  challengeMetric: load(STORAGE_KEYS.challengeMetric, "xp"),
   seenAchievements: new Set(load(STORAGE_KEYS.seenAchievements, [])),
   searchQuery: "",
   userName: "طالب CODEX-BAC",
@@ -224,6 +249,9 @@ function initState() {
   if (!state.weeklyBoss || typeof state.weeklyBoss !== "object") {
     state.weeklyBoss = null;
   }
+  if (!CHALLENGE_METRICS[state.challengeMetric]) {
+    state.challengeMetric = "xp";
+  }
   const todayKey = getTodayKey();
   if (
     state.recoveryMission.active &&
@@ -262,6 +290,7 @@ function bindEvents() {
   el.backToSubjects.addEventListener("click", onBackToSubjects);
   el.searchInput.addEventListener("input", onSearchInput);
   el.searchResults.addEventListener("click", onSearchResultClick);
+  el.leaderboard.addEventListener("click", onChallengesClick);
   el.homeLastRead.addEventListener("click", onHomeActionClick);
   el.themeToggle.addEventListener("click", onThemeToggleClick);
   el.personalNotes.addEventListener("input", onNotesInput);
@@ -448,6 +477,25 @@ function onSearchResultClick(event) {
   el.searchInput.value = "";
   el.searchResults.innerHTML = "";
   render();
+}
+
+function onChallengesClick(event) {
+  const metricBtn = event.target.closest("[data-challenge-metric]");
+  if (metricBtn) {
+    const metric = metricBtn.dataset.challengeMetric;
+    if (CHALLENGE_METRICS[metric] && metric !== state.challengeMetric) {
+      state.challengeMetric = metric;
+      save(STORAGE_KEYS.challengeMetric, state.challengeMetric);
+      renderChallenges();
+    }
+    return;
+  }
+
+  const duelBtn = event.target.closest("[data-action='start-duel']");
+  if (duelBtn) {
+    const rival = duelBtn.dataset.rival || "المنافس";
+    showToast(`تم تجهيز تحدي 1v1 ضد ${rival} (قريباً).`);
+  }
 }
 
 function onHomeActionClick(event) {
@@ -1001,23 +1049,137 @@ function renderSearchResults() {
 }
 
 function renderChallenges() {
-  const list = buildLeaderboard();
-  const meName = state.userName;
+  const metricKey = CHALLENGE_METRICS[state.challengeMetric] ? state.challengeMetric : "xp";
+  const metricMeta = CHALLENGE_METRICS[metricKey];
+  const ranked = buildLeaderboard()
+    .map((entry) => ({
+      ...entry,
+      score: getChallengeScore(entry, metricKey)
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map((entry, idx) => ({
+      ...entry,
+      rank: idx + 1
+    }));
 
-  el.leaderboard.innerHTML = list
+  const meIndex = ranked.findIndex((entry) => entry.isMe);
+  if (meIndex < 0) {
+    el.leaderboard.innerHTML = `<p class="empty-text">تعذر تحميل الترتيب حالياً.</p>`;
+    return;
+  }
+
+  const me = ranked[meIndex];
+  const top3 = ranked.slice(0, 3);
+  const podiumOrder = [1, 0, 2].map((idx) => top3[idx]).filter(Boolean);
+  const above = meIndex > 0 ? ranked[meIndex - 1] : null;
+  const below = meIndex < ranked.length - 1 ? ranked[meIndex + 1] : null;
+  const gapAbove = above ? Math.max(0, above.score - me.score) : 0;
+  const gapBelow = below ? Math.max(0, me.score - below.score) : 0;
+  const pressure = buildPressureHint(above, below, gapAbove, gapBelow, metricMeta.unit);
+  const league = getLeagueFromXP(me.points);
+  const visibleStart = Math.max(0, meIndex - 3);
+  const visibleEnd = Math.min(ranked.length, meIndex + 4);
+  const focusedRows = ranked.slice(visibleStart, visibleEnd);
+  const chaseTarget = above
+    ? `يمكنك تجاوز ${escapeHtml(above.name)} بفارق ${formatChallengeScore(gapAbove, metricKey)} فقط`
+    : "أنت في القمة حالياً، دافع عن مركزك!";
+
+  const tabsHtml = Object.entries(CHALLENGE_METRICS)
     .map(
-      (entry, index) => `
-      <article class="leader-item ${entry.name === meName ? "me" : ""}">
-        <div class="leader-rank">${index + 1}</div>
-        <div class="leader-info">
-          <strong>${escapeHtml(entry.name)}</strong>
-          <small>${escapeHtml(entry.note)}</small>
-        </div>
-        <div class="leader-score">${entry.points} XP</div>
-      </article>
+      ([key, meta]) => `
+      <button class="metric-tab ${metricKey === key ? "active" : ""}" type="button" data-challenge-metric="${key}">
+        <span>${meta.icon}</span>
+        <small>${escapeHtml(meta.label)}</small>
+      </button>
     `
     )
     .join("");
+
+  const podiumHtml = podiumOrder
+    .map((entry) => {
+      const placeClass = `place-${entry.rank}`;
+      const avatar = entry.isMe && state.userPhoto
+        ? `<img class="podium-avatar" src="${escapeAttr(state.userPhoto)}" alt="${escapeAttr(entry.name)}" />`
+        : `<div class="podium-avatar initials">${escapeHtml(initialsFromName(entry.name))}</div>`;
+      return `
+        <article class="podium-card ${placeClass} ${entry.isMe ? "me" : ""}">
+          <div class="podium-medal">${entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}</div>
+          ${avatar}
+          <strong>${escapeHtml(entry.name)}</strong>
+          <small>${formatChallengeScore(entry.score, metricKey)}</small>
+        </article>
+      `;
+    })
+    .join("");
+
+  const rowsHtml = focusedRows
+    .map((entry) => {
+      const diff = entry.score - me.score;
+      const deltaClass = diff > 0 ? "ahead" : diff < 0 ? "behind" : "same";
+      const deltaText = diff === 0 ? "أنت" : `${diff > 0 ? "↑" : "↓"} ${formatChallengeScore(Math.abs(diff), metricKey)}`;
+      return `
+        <article class="leader-item ${entry.isMe ? "me" : ""}">
+          <div class="leader-rank">${entry.rank}</div>
+          <div class="leader-info">
+            <strong>${escapeHtml(entry.name)}</strong>
+            <small>${escapeHtml(entry.note)}</small>
+          </div>
+          <div class="leader-meta">
+            <strong class="leader-score">${formatChallengeScore(entry.score, metricKey)}</strong>
+            <small class="leader-delta ${deltaClass}">${deltaText}</small>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  el.leaderboard.innerHTML = `
+    <section class="challenge-shell">
+      <div class="challenge-toolbar">
+        <div class="metric-tabs">${tabsHtml}</div>
+        <div class="league-pill ${league.id}">League: ${escapeHtml(league.label)}</div>
+      </div>
+
+      <section class="podium-grid">
+        ${podiumHtml}
+      </section>
+
+      <section class="focus-zone">
+        <div class="focus-main">
+          <h3>🎯 ترتيبك الآن: #${me.rank}</h3>
+          <p>${chaseTarget}</p>
+          <p class="focus-pressure ${pressure.className}">${escapeHtml(pressure.message)}</p>
+        </div>
+        <div class="focus-stats">
+          <div>
+            <small>قيمة الترتيب الحالية</small>
+            <strong>${formatChallengeScore(me.score, metricKey)}</strong>
+          </div>
+          <div>
+            <small>الفارق للأعلى</small>
+            <strong>${above ? formatChallengeScore(gapAbove, metricKey) : "0"}</strong>
+          </div>
+          <div>
+            <small>الفارق للأسفل</small>
+            <strong>${below ? formatChallengeScore(gapBelow, metricKey) : "0"}</strong>
+          </div>
+        </div>
+        <button class="quiz-btn duel-btn" type="button" data-action="start-duel" data-rival="${escapeAttr(above?.name || "")}">
+          ${above ? `من ستهزمه اليوم؟ ${escapeHtml(above.name)}` : "أنت المتصدر اليوم"}
+        </button>
+      </section>
+
+      <section class="challenge-list-wrap">
+        <header class="list-head">
+          <h3>📋 القائمة المحيطة بك</h3>
+          <small>3 فوقك + أنت + 3 تحتك</small>
+        </header>
+        <div class="leaderboard nearby">
+          ${rowsHtml}
+        </div>
+      </section>
+    </section>
+  `;
 }
 
 function renderNotifications() {
@@ -1894,19 +2056,88 @@ function groupUnitsByDomain(track) {
 function buildLeaderboard() {
   const userPoints = calculateUserPoints();
   const me = {
+    id: "me",
     name: state.userName,
     points: userPoints,
-    note: "نقاطك محسوبة من الإتقان + الكويز + الاستمرارية"
+    streak: getStreakDays(),
+    mastery: [...state.completed].length,
+    quiz: averageQuizPercent(),
+    note: "تركيزك اليومي يحدد صعودك",
+    isMe: true
   };
 
-  const mock = [
-    { name: "Aya_BacPro", points: 1280, note: "نشطة في محور التحليل" },
-    { name: "Hamza_Math", points: 1110, note: "متفوق في Division & Z" },
-    { name: "Lina_Science", points: 980, note: "تقدم ممتاز في المناعة" },
-    { name: "Nassim_2026", points: 760, note: "رفع السلسلة إلى 5 أيام" }
+  const mockBase = [
+    { name: "Aya_BacPro", delta: 430, streak: 12, mastery: 14, quiz: 91, note: "ثبات كبير في التحديات" },
+    { name: "Hamza_Math", delta: 250, streak: 9, mastery: 11, quiz: 88, note: "متفوق في الجبر" },
+    { name: "Lina_Science", delta: 170, streak: 8, mastery: 10, quiz: 84, note: "تقدم ممتاز في المناعة" },
+    { name: "Nassim_2026", delta: 100, streak: 7, mastery: 8, quiz: 79, note: "رفع السلسلة هذا الأسبوع" },
+    { name: "Imene_Elite", delta: 35, streak: 6, mastery: 7, quiz: 75, note: "قريبة جداً منك" },
+    { name: "Younes_Brain", delta: -25, streak: 5, mastery: 7, quiz: 72, note: "يطاردك بقوة" },
+    { name: "Sara_Codex", delta: -70, streak: 4, mastery: 6, quiz: 70, note: "حاضرة يومياً" },
+    { name: "Riad_Pro", delta: -140, streak: 3, mastery: 5, quiz: 66, note: "تحسن ملحوظ في الكويز" },
+    { name: "Maya_Bac", delta: -210, streak: 2, mastery: 4, quiz: 62, note: "تبدأ موجة صعود جديدة" }
   ];
 
-  return [me, ...mock].sort((a, b) => b.points - a.points);
+  const mock = mockBase.map((entry, idx) => ({
+    id: `mock-${idx}`,
+    name: entry.name,
+    points: Math.max(80, userPoints + entry.delta),
+    streak: entry.streak,
+    mastery: entry.mastery,
+    quiz: entry.quiz,
+    note: entry.note,
+    isMe: false
+  }));
+
+  return [me, ...mock];
+}
+
+function getChallengeScore(entry, metricKey) {
+  if (metricKey === "streak") return Math.max(0, Number(entry.streak) || 0);
+  if (metricKey === "mastery") return Math.max(0, Number(entry.mastery) || 0);
+  if (metricKey === "quiz") return Math.max(0, Number(entry.quiz) || 0);
+  return Math.max(0, Number(entry.points) || 0);
+}
+
+function formatChallengeScore(value, metricKey) {
+  const safe = Math.max(0, Number(value) || 0);
+  if (metricKey === "quiz") return `${Math.round(safe)}%`;
+  if (metricKey === "streak") return `${Math.round(safe)} يوم`;
+  if (metricKey === "mastery") return `${Math.round(safe)} وحدة`;
+  return `${Math.round(safe)} XP`;
+}
+
+function getLeagueFromXP(points) {
+  const xp = Math.max(0, Number(points) || 0);
+  if (xp >= 2200) return { id: "elite", label: "Elite" };
+  if (xp >= 1400) return { id: "gold", label: "Gold" };
+  if (xp >= 700) return { id: "silver", label: "Silver" };
+  return { id: "bronze", label: "Bronze" };
+}
+
+function buildPressureHint(above, below, gapAbove, gapBelow, unit) {
+  if (below && gapBelow <= 25) {
+    return {
+      className: "danger",
+      message: `🔥 ${below.name} يقترب منك (${Math.round(gapBelow)} ${unit})`
+    };
+  }
+  if (above && gapAbove <= 30) {
+    return {
+      className: "push",
+      message: `🚀 فرصة صعود: ${above.name} أمامك بفارق ${Math.round(gapAbove)} ${unit}`
+    };
+  }
+  if (!above) {
+    return {
+      className: "top",
+      message: "👑 أنت المتصدر، حافظ على الفارق."
+    };
+  }
+  return {
+    className: "calm",
+    message: "📈 تقدمك مستقر، ركز على مهام اليوم لتسريع الصعود."
+  };
 }
 
 function calculateUserPoints() {
