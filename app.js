@@ -2,7 +2,7 @@
 import { corners, tracks } from "./data.js";
 
 const BAC_EXAM_DATE = "2026-06-14";
-const BUILD_ID = "2026-03-29-v8";
+const BUILD_ID = "2026-03-29-v9";
 
 const STORAGE_KEYS = {
   page: "codex_bac_page",
@@ -21,7 +21,7 @@ const STORAGE_KEYS = {
   dailyTasks: "codex_bac_daily_tasks",
   recoveryMission: "codex_bac_recovery_mission",
   weeklyBoss: "codex_bac_weekly_boss",
-  challengeMetric: "codex_bac_challenge_metric"
+  challengeBoardMode: "codex_bac_challenge_board_mode"
 };
 
 const XP_RULES = {
@@ -55,26 +55,16 @@ const WEEKLY_BOSS_RULES = {
   legendaryReward: 620
 };
 
-const CHALLENGE_METRICS = {
-  xp: {
-    label: "XP",
-    icon: "🏆",
-    unit: "XP"
+const LEADERBOARD_MODES = {
+  weekly: {
+    id: "weekly",
+    label: "ترتيب هذا الأسبوع",
+    icon: "⏳"
   },
-  streak: {
-    label: "الانضباط",
-    icon: "🔥",
-    unit: "يوم"
-  },
-  mastery: {
-    label: "الإتقان",
-    icon: "⚔️",
-    unit: "وحدة"
-  },
-  quiz: {
-    label: "الكويز",
-    icon: "🧠",
-    unit: "%"
+  alltime: {
+    id: "alltime",
+    label: "الترتيب العام",
+    icon: "🌍"
   }
 };
 
@@ -152,14 +142,15 @@ const state = {
     claimed: false
   }),
   weeklyBoss: load(STORAGE_KEYS.weeklyBoss, null),
-  challengeMetric: load(STORAGE_KEYS.challengeMetric, "xp"),
+  challengeBoardMode: load(STORAGE_KEYS.challengeBoardMode, "weekly"),
   seenAchievements: new Set(load(STORAGE_KEYS.seenAchievements, [])),
   searchQuery: "",
   userName: "طالب CODEX-BAC",
   userPhoto: "",
   sessionStartedAt: Date.now(),
   hasRenderedProfileOnce: false,
-  activeCoreSession: null
+  activeCoreSession: null,
+  challengeLeagueTipOpen: false
 };
 
 let coreReadTimer = null;
@@ -267,8 +258,8 @@ function initState() {
   if (!state.weeklyBoss || typeof state.weeklyBoss !== "object") {
     state.weeklyBoss = null;
   }
-  if (!CHALLENGE_METRICS[state.challengeMetric]) {
-    state.challengeMetric = "xp";
+  if (!LEADERBOARD_MODES[state.challengeBoardMode]) {
+    state.challengeBoardMode = "weekly";
   }
   const todayKey = getTodayKey();
   if (
@@ -502,14 +493,22 @@ function onSearchResultClick(event) {
 }
 
 function onChallengesClick(event) {
-  const metricBtn = event.target.closest("[data-challenge-metric]");
-  if (metricBtn) {
-    const metric = metricBtn.dataset.challengeMetric;
-    if (CHALLENGE_METRICS[metric] && metric !== state.challengeMetric) {
-      state.challengeMetric = metric;
-      save(STORAGE_KEYS.challengeMetric, state.challengeMetric);
+  const boardBtn = event.target.closest("[data-board-mode]");
+  if (boardBtn) {
+    const mode = boardBtn.dataset.boardMode;
+    if (LEADERBOARD_MODES[mode] && mode !== state.challengeBoardMode) {
+      state.challengeBoardMode = mode;
+      state.challengeLeagueTipOpen = false;
+      save(STORAGE_KEYS.challengeBoardMode, state.challengeBoardMode);
       renderChallenges();
     }
+    return;
+  }
+
+  const leagueBtn = event.target.closest("[data-action='toggle-league-tip']");
+  if (leagueBtn) {
+    state.challengeLeagueTipOpen = !state.challengeLeagueTipOpen;
+    renderChallenges();
     return;
   }
 
@@ -517,6 +516,7 @@ function onChallengesClick(event) {
   if (duelBtn) {
     const rival = duelBtn.dataset.rival || "المنافس";
     showToast(`تم تجهيز تحدي 1v1 ضد ${rival} (قريباً).`);
+    state.challengeLeagueTipOpen = false;
   }
 }
 
@@ -1071,12 +1071,12 @@ function renderSearchResults() {
 }
 
 function renderChallenges() {
-  const metricKey = CHALLENGE_METRICS[state.challengeMetric] ? state.challengeMetric : "xp";
-  const metricMeta = CHALLENGE_METRICS[metricKey];
+  const modeKey = LEADERBOARD_MODES[state.challengeBoardMode] ? state.challengeBoardMode : "weekly";
+  const modeMeta = LEADERBOARD_MODES[modeKey];
   const ranked = buildLeaderboard()
     .map((entry) => ({
       ...entry,
-      score: getChallengeScore(entry, metricKey)
+      score: getLeaderboardScore(entry, modeKey)
     }))
     .sort((a, b) => b.score - a.score)
     .map((entry, idx) => ({
@@ -1097,19 +1097,20 @@ function renderChallenges() {
   const below = meIndex < ranked.length - 1 ? ranked[meIndex + 1] : null;
   const gapAbove = above ? Math.max(0, above.score - me.score) : 0;
   const gapBelow = below ? Math.max(0, me.score - below.score) : 0;
-  const pressure = buildPressureHint(above, below, gapAbove, gapBelow, metricMeta.unit);
+  const pressure = buildPressureHint(above, below, gapAbove, gapBelow, "XP");
   const league = getLeagueFromXP(me.points);
+  const leagueProgress = getLeagueProgressHint(me.points);
   const visibleStart = Math.max(0, meIndex - 3);
   const visibleEnd = Math.min(ranked.length, meIndex + 4);
   const focusedRows = ranked.slice(visibleStart, visibleEnd);
   const chaseTarget = above
-    ? `يمكنك تجاوز ${escapeHtml(above.name)} بفارق ${formatChallengeScore(gapAbove, metricKey)} فقط`
+    ? `أنت متأخر بـ ${formatXP(gapAbove)} فقط عن ${escapeHtml(above.name)}. أكمل كويز اليوم لتتجاوزه.`
     : "أنت في القمة حالياً، دافع عن مركزك!";
 
-  const tabsHtml = Object.entries(CHALLENGE_METRICS)
+  const modesHtml = Object.entries(LEADERBOARD_MODES)
     .map(
       ([key, meta]) => `
-      <button class="metric-tab ${metricKey === key ? "active" : ""}" type="button" data-challenge-metric="${key}">
+      <button class="board-tab ${modeKey === key ? "active" : ""}" type="button" data-board-mode="${key}">
         <span>${meta.icon}</span>
         <small>${escapeHtml(meta.label)}</small>
       </button>
@@ -1146,7 +1147,7 @@ function renderChallenges() {
           <img class="rank-badge podium-rank-badge" src="${escapeAttr(entryBadge)}" alt="Rank badge ${entry.rank}" loading="lazy" />
           ${avatar}
           <strong>${escapeHtml(entry.name)}</strong>
-          <small>${formatChallengeScore(entry.score, metricKey)}</small>
+          <small>${formatXP(entry.score)}</small>
         </article>
       `;
     })
@@ -1156,7 +1157,7 @@ function renderChallenges() {
     .map((entry) => {
       const diff = entry.score - me.score;
       const deltaClass = diff > 0 ? "ahead" : diff < 0 ? "behind" : "same";
-      const deltaText = diff === 0 ? "أنت" : `${diff > 0 ? "↑" : "↓"} ${formatChallengeScore(Math.abs(diff), metricKey)}`;
+      const deltaText = diff === 0 ? "أنت" : `${diff > 0 ? "↑" : "↓"} ${formatXP(Math.abs(diff))}`;
       const rowBadge = getRankBadgeAssetByPoints(entry.points);
       return `
         <article class="leader-item ${entry.isMe ? "me" : ""}">
@@ -1169,7 +1170,7 @@ function renderChallenges() {
             <small>${escapeHtml(entry.note)}</small>
           </div>
           <div class="leader-meta">
-            <strong class="leader-score">${formatChallengeScore(entry.score, metricKey)}</strong>
+            <strong class="leader-score">${formatXP(entry.score)}</strong>
             <small class="leader-delta ${deltaClass}">${deltaText}</small>
           </div>
         </article>
@@ -1180,12 +1181,23 @@ function renderChallenges() {
   el.leaderboard.innerHTML = `
     <section class="challenge-shell">
       <div class="challenge-toolbar">
-        <div class="metric-tabs">${tabsHtml}</div>
-        <div class="league-pill ${league.id}">
-          <img class="rank-badge league-badge" src="${escapeAttr(leagueBadge)}" alt="League badge" loading="lazy" />
-          <span>League: ${escapeHtml(league.label)}</span>
+        <div class="board-tabs">${modesHtml}</div>
+        <div class="league-stack">
+          <button class="league-pill ${league.id}" type="button" data-action="toggle-league-tip" aria-expanded="${state.challengeLeagueTipOpen ? "true" : "false"}">
+            <img class="rank-badge league-badge" src="${escapeAttr(leagueBadge)}" alt="League badge" loading="lazy" />
+            <span>League: ${escapeHtml(league.label)}</span>
+          </button>
+          <div class="league-tip ${state.challengeLeagueTipOpen ? "show" : ""}">
+            ${
+              leagueProgress
+                ? `اجمع <strong>${formatXP(leagueProgress.remaining)}</strong> للترقية إلى دوري <strong>${escapeHtml(leagueProgress.nextLabel)}</strong>.`
+                : "أنت في أعلى دوري حالياً. استمر للحفاظ على موقعك."
+            }
+          </div>
         </div>
       </div>
+
+      <p class="challenge-mode-note">${escapeHtml(modeMeta.label)} • الترتيب يعتمد على XP فقط</p>
 
       <section class="podium-grid">
         ${podiumHtml}
@@ -1194,21 +1206,21 @@ function renderChallenges() {
       <section class="focus-zone">
         <div class="focus-main">
           <h3>🎯 ترتيبك الآن: #${me.rank}</h3>
-          <p>${chaseTarget}</p>
+          <p class="rival-line">${chaseTarget}</p>
           <p class="focus-pressure ${pressure.className}">${escapeHtml(pressure.message)}</p>
         </div>
         <div class="focus-stats">
           <div>
             <small>قيمة الترتيب الحالية</small>
-            <strong>${formatChallengeScore(me.score, metricKey)}</strong>
+            <strong>${formatXP(me.score)}</strong>
           </div>
           <div>
             <small>الفارق للأعلى</small>
-            <strong>${above ? formatChallengeScore(gapAbove, metricKey) : "0"}</strong>
+            <strong>${above ? formatXP(gapAbove) : "0 XP"}</strong>
           </div>
           <div>
             <small>الفارق للأسفل</small>
-            <strong>${below ? formatChallengeScore(gapBelow, metricKey) : "0"}</strong>
+            <strong>${below ? formatXP(gapBelow) : "0 XP"}</strong>
           </div>
         </div>
         <button class="quiz-btn duel-btn" type="button" data-action="start-duel" data-rival="${escapeAttr(above?.name || "")}">
@@ -1233,6 +1245,23 @@ function renderChallenges() {
       animateChallengePodium();
     });
   }
+}
+
+function getLeaderboardScore(entry, modeKey) {
+  if (modeKey === "alltime") return Math.max(0, Math.round(Number(entry.points) || 0));
+  return Math.max(0, Math.round(Number(entry.weeklyPoints ?? entry.points) || 0));
+}
+
+function formatXP(value) {
+  return `${Math.max(0, Math.round(Number(value) || 0))} XP`;
+}
+
+function getLeagueProgressHint(points) {
+  const xp = Math.max(0, Number(points) || 0);
+  if (xp < 700) return { nextLabel: "Silver", remaining: 700 - xp };
+  if (xp < 1400) return { nextLabel: "Gold", remaining: 1400 - xp };
+  if (xp < 2200) return { nextLabel: "Elite", remaining: 2200 - xp };
+  return null;
 }
 
 function animateChallengePodium() {
@@ -2205,36 +2234,33 @@ function groupUnitsByDomain(track) {
 
 function buildLeaderboard() {
   const userPoints = calculateUserPoints();
+  const userWeeklyPoints = calculateWeeklyXPFromClaims();
   const me = {
     id: "me",
     name: state.userName,
     points: userPoints,
-    streak: getStreakDays(),
-    mastery: [...state.completed].length,
-    quiz: averageQuizPercent(),
+    weeklyPoints: userWeeklyPoints,
     note: "تركيزك اليومي يحدد صعودك",
     isMe: true
   };
 
   const mockBase = [
-    { name: "Aya_BacPro", delta: 430, streak: 12, mastery: 14, quiz: 91, note: "ثبات كبير في التحديات" },
-    { name: "Hamza_Math", delta: 250, streak: 9, mastery: 11, quiz: 88, note: "متفوق في الجبر" },
-    { name: "Lina_Science", delta: 170, streak: 8, mastery: 10, quiz: 84, note: "تقدم ممتاز في المناعة" },
-    { name: "Nassim_2026", delta: 100, streak: 7, mastery: 8, quiz: 79, note: "رفع السلسلة هذا الأسبوع" },
-    { name: "Imene_Elite", delta: 35, streak: 6, mastery: 7, quiz: 75, note: "قريبة جداً منك" },
-    { name: "Younes_Brain", delta: -25, streak: 5, mastery: 7, quiz: 72, note: "يطاردك بقوة" },
-    { name: "Sara_Codex", delta: -70, streak: 4, mastery: 6, quiz: 70, note: "حاضرة يومياً" },
-    { name: "Riad_Pro", delta: -140, streak: 3, mastery: 5, quiz: 66, note: "تحسن ملحوظ في الكويز" },
-    { name: "Maya_Bac", delta: -210, streak: 2, mastery: 4, quiz: 62, note: "تبدأ موجة صعود جديدة" }
+    { name: "Aya_BacPro", delta: 430, note: "ثبات كبير في التحديات" },
+    { name: "Hamza_Math", delta: 250, note: "متفوق في الجبر" },
+    { name: "Lina_Science", delta: 170, note: "تقدم ممتاز في المناعة" },
+    { name: "Nassim_2026", delta: 100, note: "رفع السلسلة هذا الأسبوع" },
+    { name: "Imene_Elite", delta: 35, note: "قريبة جداً منك" },
+    { name: "Younes_Brain", delta: -25, note: "يطاردك بقوة" },
+    { name: "Sara_Codex", delta: -70, note: "حاضرة يومياً" },
+    { name: "Riad_Pro", delta: -140, note: "تحسن ملحوظ في الكويز" },
+    { name: "Maya_Bac", delta: -210, note: "تبدأ موجة صعود جديدة" }
   ];
 
   const mock = mockBase.map((entry, idx) => ({
     id: `mock-${idx}`,
     name: entry.name,
     points: Math.max(80, userPoints + entry.delta),
-    streak: entry.streak,
-    mastery: entry.mastery,
-    quiz: entry.quiz,
+    weeklyPoints: calculateMockWeeklyXP(entry.name, Math.max(80, userPoints + entry.delta)),
     note: entry.note,
     isMe: false
   }));
@@ -2242,19 +2268,37 @@ function buildLeaderboard() {
   return [me, ...mock];
 }
 
-function getChallengeScore(entry, metricKey) {
-  if (metricKey === "streak") return Math.max(0, Number(entry.streak) || 0);
-  if (metricKey === "mastery") return Math.max(0, Number(entry.mastery) || 0);
-  if (metricKey === "quiz") return Math.max(0, Number(entry.quiz) || 0);
-  return Math.max(0, Number(entry.points) || 0);
+function calculateWeeklyXPFromClaims() {
+  const start = getWeekKey();
+  const end = getTodayKey();
+  let total = 0;
+  Object.keys(state.eventClaims || {}).forEach((claimKey) => {
+    const parts = claimKey.split(":");
+    if (parts.length < 3) return;
+    const maybeDate = parts[parts.length - 1];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(maybeDate)) return;
+    if (maybeDate < start || maybeDate > end) return;
+    const eventName = parts[0];
+    const baseXP = XP_RULES[eventName]?.xp || 0;
+    total += baseXP;
+  });
+  if (total > 0) return Math.round(total);
+  return Math.max(20, Math.round(calculateUserPoints() * 0.18));
 }
 
-function formatChallengeScore(value, metricKey) {
-  const safe = Math.max(0, Number(value) || 0);
-  if (metricKey === "quiz") return `${Math.round(safe)}%`;
-  if (metricKey === "streak") return `${Math.round(safe)} يوم`;
-  if (metricKey === "mastery") return `${Math.round(safe)} وحدة`;
-  return `${Math.round(safe)} XP`;
+function calculateMockWeeklyXP(name, allTimePoints) {
+  const seed = hashString(`${name}:${getWeekKey()}`);
+  const ratio = 0.22 + (seed % 24) / 100;
+  const bonus = 30 + (seed % 95);
+  return Math.max(40, Math.round(allTimePoints * ratio + bonus));
+}
+
+function hashString(value = "") {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
 }
 
 function getLeagueFromXP(points) {
@@ -2284,13 +2328,13 @@ function getRankBadgeAssetByPoints(points) {
 }
 
 function buildPressureHint(above, below, gapAbove, gapBelow, unit) {
-  if (below && gapBelow <= 25) {
+  if (below && gapBelow <= 90) {
     return {
       className: "danger",
       message: `🔥 ${below.name} يقترب منك (${Math.round(gapBelow)} ${unit})`
     };
   }
-  if (above && gapAbove <= 30) {
+  if (above && gapAbove <= 130) {
     return {
       className: "push",
       message: `🚀 فرصة صعود: ${above.name} أمامك بفارق ${Math.round(gapAbove)} ${unit}`

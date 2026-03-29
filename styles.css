@@ -805,13 +805,13 @@ body {
   flex-wrap: wrap;
 }
 
-.metric-tabs {
+.board-tabs {
   display: flex;
   gap: 0.36rem;
   flex-wrap: wrap;
 }
 
-.metric-tab {
+.board-tab {
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 10px;
   background: var(--bg-panel-strong);
@@ -823,14 +823,20 @@ body {
   cursor: pointer;
 }
 
-.metric-tab small {
+.board-tab small {
   font-size: 0.76rem;
   color: var(--text-soft);
 }
 
-.metric-tab.active {
+.board-tab.active {
   border-color: color-mix(in srgb, var(--track-accent) 45%, white);
   background: color-mix(in srgb, var(--track-accent) 16%, var(--bg-panel-strong));
+}
+
+.league-stack {
+  display: grid;
+  justify-items: end;
+  gap: 0.26rem;
 }
 
 .league-pill {
@@ -842,6 +848,31 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.34rem;
+}
+
+.league-tip {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+  max-width: 360px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-panel-strong) 94%, black 6%);
+  padding: 0.32rem 0.5rem;
+  font-size: 0.76rem;
+  color: var(--text-soft);
+}
+
+.league-tip.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.challenge-mode-note {
+  margin: -0.2rem 0 0.1rem;
+  font-size: 0.8rem;
+  color: var(--text-soft);
 }
 
 .rank-badge {
@@ -908,16 +939,25 @@ body {
 .podium-card.place-1 {
   border-color: rgba(255, 216, 128, 0.62);
   box-shadow:
-    0 0 16px rgba(255, 216, 128, 0.22),
-    0 0 26px rgba(116, 186, 255, 0.18);
+    0 0 16px rgba(255, 216, 128, 0.32),
+    0 0 30px rgba(255, 216, 128, 0.25),
+    0 0 40px rgba(116, 186, 255, 0.14);
   transform: translateY(-6px);
 }
 
 .podium-card.place-2 {
+  border-color: rgba(216, 229, 255, 0.52);
+  box-shadow:
+    0 0 14px rgba(216, 229, 255, 0.24),
+    0 0 26px rgba(150, 181, 238, 0.16);
   transform: translateY(-2px);
 }
 
 .podium-card.place-3 {
+  border-color: rgba(216, 165, 130, 0.52);
+  box-shadow:
+    0 0 14px rgba(216, 165, 130, 0.22),
+    0 0 26px rgba(166, 117, 79, 0.14);
   transform: translateY(-1px);
 }
 
@@ -1054,6 +1094,11 @@ body {
 
 .focus-main p {
   margin: 0.3rem 0 0;
+}
+
+.rival-line {
+  font-weight: 700;
+  color: #bfe3ff;
 }
 
 .focus-pressure {
@@ -1974,17 +2019,17 @@ body {
     align-items: stretch;
   }
 
-  .metric-tabs {
+  .board-tabs {
     justify-content: space-between;
   }
 
-  .metric-tab {
+  .board-tab {
     flex: 1;
     justify-content: center;
     padding: 0.28rem 0.44rem;
   }
 
-  .metric-tab small {
+  .board-tab small {
     font-size: 0.69rem;
   }
 
