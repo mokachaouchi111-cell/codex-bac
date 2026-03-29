@@ -1,0 +1,170 @@
+{
+  "version": 2,
+  "engine": {
+    "name": "CODEX Score Algorithm",
+    "current_xp_key": "current_xp",
+    "level_formula": "XP_Required = 100 * (Level ^ 1.5)",
+    "events": {
+      "daily_login": {
+        "xp": 10,
+        "claim_window": "daily"
+      },
+      "lesson_read_complete": {
+        "xp": 20,
+        "min_seconds": 120,
+        "claim_window": "daily_per_unit"
+      },
+      "summary_view": {
+        "xp": 10,
+        "claim_window": "daily_per_unit"
+      },
+      "exercise_solved": {
+        "xp": 30,
+        "claim_window": "daily_per_unit"
+      },
+      "quiz_100": {
+        "xp": 100,
+        "claim_window": "repeatable"
+      },
+      "quiz_80": {
+        "xp": 50,
+        "claim_window": "repeatable"
+      },
+      "unit_complete": {
+        "xp": 250,
+        "claim_window": "lifetime_per_unit",
+        "visual_burst": "profile_color_burst"
+      }
+    },
+    "streak_multiplier": {
+      "threshold_days": 5,
+      "value": 1.2,
+      "duration": "same_day"
+    }
+  },
+  "daily_tasks_engine": {
+    "regeneration": "daily",
+    "strategy": "adaptive_by_level_weakness_time",
+    "default_tasks": [
+      {
+        "id": "deep_core",
+        "trigger": "lesson_read_complete",
+        "reward_xp": 35
+      },
+      {
+        "id": "training_ground",
+        "trigger": "exercise_solved",
+        "reward_xp": 40
+      },
+      {
+        "id": "weakness_focus",
+        "trigger": "weakness_focus_activity",
+        "reward_xp": 45
+      }
+    ]
+  },
+  "recovery_mission": {
+    "trigger": "streak_break_after_3_days",
+    "penalty_xp_range": [
+      30,
+      120
+    ],
+    "required_actions": 2,
+    "reward_xp": 90,
+    "valid_actions": [
+      "lesson_read_complete",
+      "exercise_solved",
+      "quiz_80_plus",
+      "unit_complete"
+    ]
+  },
+  "weekly_boss": {
+    "rotation": "weekly",
+    "goal_model": "complete_units_and_high_quizzes",
+    "reward_by_tier": {
+      "basic_rare": 320,
+      "epic": 460,
+      "legendary": 620
+    }
+  },
+  "tiers": [
+    {
+      "id": "basic",
+      "name": "Basic",
+      "level_min": 1,
+      "level_max": 5,
+      "visual_features": [
+        "flat_glass_theme"
+      ]
+    },
+    {
+      "id": "rare",
+      "name": "Rare",
+      "level_min": 6,
+      "level_max": 15,
+      "visual_features": [
+        "identity_shine_effect",
+        "animated_gradient_background"
+      ]
+    },
+    {
+      "id": "epic",
+      "name": "Epic",
+      "level_min": 16,
+      "level_max": 29,
+      "visual_features": [
+        "floating_particles_background",
+        "silver_pulse_border"
+      ]
+    },
+    {
+      "id": "legendary",
+      "name": "Legendary",
+      "level_min": 30,
+      "level_max": 999,
+      "visual_features": [
+        "animated_fire_avatar_border",
+        "interactive_background",
+        "tilt_effect_mouse_gyro"
+      ]
+    }
+  ],
+  "achievements": [
+    {
+      "id": "disciplined",
+      "name": "وسام المنضبط",
+      "unlock_condition": {
+        "type": "streak_days",
+        "value": 7
+      },
+      "reward": {
+        "xp": 120,
+        "visual_unlock": "flame_aura_plus"
+      }
+    },
+    {
+      "id": "expert",
+      "name": "وسام الخبير",
+      "unlock_condition": {
+        "type": "completed_units",
+        "value": 10
+      },
+      "reward": {
+        "xp": 300,
+        "visual_unlock": "epic_identity_highlight"
+      }
+    },
+    {
+      "id": "bug_hunter",
+      "name": "صياد الثغرات",
+      "unlock_condition": {
+        "type": "perfect_quiz_streak",
+        "value": 5
+      },
+      "reward": {
+        "xp": 250,
+        "visual_unlock": "legendary_particle_intensity"
+      }
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a111d" />
+    <title>CODEX-BAC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+
+    <main class="app-shell">
+      <header class="topbar glass">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">⌬</div>
+          <div>
+            <h1>CODEX-BAC</h1>
+            <p id="topbar-subtitle">The Digital Codex</p>
+          </div>
+        </div>
+        <div id="user-chip" class="user-chip">طالب CODEX-BAC</div>
+      </header>
+
+      <div id="spa-stage" class="spa-stage">
+        <section id="page-home" class="page active" data-page="home">
+          <article class="home-hero glass">
+            <div>
+              <h2>مرحباً <span id="home-username">طالب CODEX-BAC</span></h2>
+              <p>خريطة طريق البكالوريا أمامك بوضوح.</p>
+            </div>
+            <div class="countdown-badge">
+              <small>العد التنازلي للبكالوريا</small>
+              <strong id="bac-countdown">--</strong>
+            </div>
+          </article>
+
+          <section id="home-stats" class="home-stats"></section>
+
+          <article id="home-last-read" class="home-last-read glass"></article>
+        </section>
+
+        <section id="page-curriculum" class="page" data-page="curriculum">
+          <section id="track-switcher" class="track-switcher glass"></section>
+
+          <section class="search-wrap glass">
+            <label for="search-input">محرك البحث الذكي</label>
+            <input id="search-input" type="search" placeholder="ابحث عن درس، وحدة، أو كلمة مفتاحية..." />
+            <div id="search-results" class="search-results"></div>
+          </section>
+
+          <section class="curriculum-zone">
+            <article class="curriculum-panel glass">
+              <header class="section-head">
+                <h2>المواد</h2>
+                <p id="track-subtitle"></p>
+              </header>
+              <div id="subjects-grid" class="subjects-grid"></div>
+            </article>
+
+            <article class="curriculum-panel glass">
+              <header class="section-head row">
+                <div>
+                  <h2 id="units-title">الوحدات</h2>
+                  <p id="units-subtitle"></p>
+                </div>
+                <button id="back-to-subjects" class="ghost-btn hidden" type="button">رجوع</button>
+              </header>
+              <div id="units-tree" class="units-tree"></div>
+            </article>
+          </section>
+
+          <article id="detail-view" class="detail-view glass"></article>
+        </section>
+
+        <section id="page-challenges" class="page" data-page="challenges">
+          <article class="page-card glass">
+            <h2>التحديات والترتيب</h2>
+            <p>نافس زملاءك وتابع تقدمك في ساحة التحديات.</p>
+            <div id="leaderboard" class="leaderboard"></div>
+          </article>
+        </section>
+
+        <section id="page-notifications" class="page" data-page="notifications">
+          <article class="page-card glass">
+            <h2>الإشعارات</h2>
+            <p>تنبيهات الدروس الجديدة وتواريخ فتح الأقسام القادمة.</p>
+            <div id="notifications-list" class="notifications-list"></div>
+          </article>
+        </section>
+
+        <section id="page-profile" class="page" data-page="profile">
+          <div class="profile-layout">
+            <article class="page-card profile-card glass">
+              <h2>لوحة هوية الطالب</h2>
+              <div id="profile-identity"></div>
+            </article>
+
+            <article class="page-card glass">
+              <h3>مصفوفة الانضباط</h3>
+              <div id="streak-pill" class="streak-pill"></div>
+              <div id="activity-heatmap" class="activity-heatmap"></div>
+            </article>
+
+            <article class="page-card glass">
+              <h3>خزنة الإنجازات</h3>
+              <div id="achievements-grid" class="achievements-grid"></div>
+            </article>
+
+            <article class="page-card glass">
+              <h3>مركز قيادة الأداء</h3>
+              <div id="target-actual" class="target-actual"></div>
+              <div id="skill-radar" class="skill-radar"></div>
+            </article>
+
+            <article class="page-card glass">
+              <h3>المهام اليومية الذكية</h3>
+              <p>مهام تتولد حسب مستواك ونقاط ضعفك.</p>
+              <div id="daily-tasks" class="missions-list"></div>
+            </article>
+
+            <article class="page-card glass">
+              <h3>مهمة التعويض</h3>
+              <p>إذا انقطعت السلسلة، يمكنك استرجاع الانضباط بمهمة سريعة.</p>
+              <div id="recovery-mission" class="recovery-box"></div>
+            </article>
+
+            <article class="page-card glass">
+              <h3>Boss الأسبوع</h3>
+              <p>تحدي قوي بمكافأة XP ضخمة.</p>
+              <div id="weekly-boss" class="boss-box"></div>
+            </article>
+
+            <article class="page-card glass">
+              <h3>الملاحظات الذهبية</h3>
+              <textarea
+                id="personal-notes"
+                class="notes-input"
+                rows="5"
+                placeholder="اكتب قوانينك السريعة، أفكارك المهمة، أو نقاط تحتاج مراجعتها..."
+              ></textarea>
+              <div class="settings-list">
+                <button id="theme-toggle" class="settings-btn" type="button">الوضع الحالي: Dark (اضغط للتبديل)</button>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <nav id="bottom-nav" class="bottom-nav glass" aria-label="التنقل السفلي">
+      <button class="nav-item active" type="button" data-page-target="home">
+        <span aria-hidden="true">🏠</span>
+        <small>الرئيسية</small>
+      </button>
+      <button class="nav-item" type="button" data-page-target="curriculum">
+        <span aria-hidden="true">📚</span>
+        <small>المنهج</small>
+      </button>
+      <button class="nav-item" type="button" data-page-target="challenges">
+        <span aria-hidden="true">🏆</span>
+        <small>التحديات</small>
+      </button>
+      <button class="nav-item" type="button" data-page-target="notifications">
+        <span aria-hidden="true">🔔</span>
+        <small>الإشعارات</small>
+      </button>
+      <button class="nav-item" type="button" data-page-target="profile">
+        <span aria-hidden="true">👤</span>
+        <small>الملف</small>
+      </button>
+    </nav>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
