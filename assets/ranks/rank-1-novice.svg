@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Novice rank badge">
+  <defs>
+    <linearGradient id="novice-frame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d8c5ff"/>
+      <stop offset="100%" stop-color="#8a78ff"/>
+    </linearGradient>
+    <linearGradient id="novice-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a2350"/>
+      <stop offset="100%" stop-color="#0f1433"/>
+    </linearGradient>
+  </defs>
+  <polygon points="128,20 210,68 210,164 128,212 46,164 46,68" fill="url(#novice-frame)" />
+  <polygon points="128,36 196,76 196,156 128,196 60,156 60,76" fill="url(#novice-core)" />
+  <path d="M70 78 L125 44" stroke="rgba(255,255,255,0.6)" stroke-width="5" stroke-linecap="round" />
+  <path d="M179 176 L130 204" stroke="rgba(255,255,255,0.2)" stroke-width="4" stroke-linecap="round" />
+</svg>

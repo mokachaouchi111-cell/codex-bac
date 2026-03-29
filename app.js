@@ -2,6 +2,7 @@
 import { corners, tracks } from "./data.js";
 
 const BAC_EXAM_DATE = "2026-06-14";
+const BUILD_ID = "2026-03-29-v8";
 
 const STORAGE_KEYS = {
   page: "codex_bac_page",
@@ -75,6 +76,22 @@ const CHALLENGE_METRICS = {
     icon: "🧠",
     unit: "%"
   }
+};
+
+const RANK_BADGE_ASSETS = [
+  "./assets/ranks/rank-1-novice.svg",
+  "./assets/ranks/rank-2-rising.svg",
+  "./assets/ranks/rank-3-discipline.svg",
+  "./assets/ranks/rank-4-warrior.svg",
+  "./assets/ranks/rank-5-elite.svg",
+  "./assets/ranks/rank-6-legend.svg"
+];
+
+const LEAGUE_BADGE_BY_ID = {
+  bronze: RANK_BADGE_ASSETS[1],
+  silver: RANK_BADGE_ASSETS[2],
+  gold: RANK_BADGE_ASSETS[4],
+  elite: RANK_BADGE_ASSETS[5]
 };
 
 const BACKEND_XP_ENDPOINT = window.CODEX_XP_ENDPOINT || "";
@@ -1100,9 +1117,12 @@ function renderChallenges() {
     )
     .join("");
 
+  const leagueBadge = LEAGUE_BADGE_BY_ID[league.id] || RANK_BADGE_ASSETS[0];
+
   const podiumHtml = podiumOrder
     .map((entry) => {
       const placeClass = `place-${entry.rank}`;
+      const entryBadge = getRankBadgeAssetByPoints(entry.points);
       const avatar = entry.isMe && state.userPhoto
         ? `<img class="podium-avatar" src="${escapeAttr(state.userPhoto)}" alt="${escapeAttr(entry.name)}" />`
         : `<div class="podium-avatar initials">${escapeHtml(initialsFromName(entry.name))}</div>`;
@@ -1123,6 +1143,7 @@ function renderChallenges() {
         <article class="podium-card ${placeClass} ${entry.isMe ? "me" : ""}" data-podium-rank="${entry.rank}">
           ${wingsHtml}
           <div class="podium-medal">${entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}</div>
+          <img class="rank-badge podium-rank-badge" src="${escapeAttr(entryBadge)}" alt="Rank badge ${entry.rank}" loading="lazy" />
           ${avatar}
           <strong>${escapeHtml(entry.name)}</strong>
           <small>${formatChallengeScore(entry.score, metricKey)}</small>
@@ -1136,11 +1157,15 @@ function renderChallenges() {
       const diff = entry.score - me.score;
       const deltaClass = diff > 0 ? "ahead" : diff < 0 ? "behind" : "same";
       const deltaText = diff === 0 ? "أنت" : `${diff > 0 ? "↑" : "↓"} ${formatChallengeScore(Math.abs(diff), metricKey)}`;
+      const rowBadge = getRankBadgeAssetByPoints(entry.points);
       return `
         <article class="leader-item ${entry.isMe ? "me" : ""}">
           <div class="leader-rank">${entry.rank}</div>
           <div class="leader-info">
-            <strong>${escapeHtml(entry.name)}</strong>
+            <strong class="leader-title">
+              <img class="rank-badge leader-rank-badge" src="${escapeAttr(rowBadge)}" alt="Rank badge" loading="lazy" />
+              <span>${escapeHtml(entry.name)}</span>
+            </strong>
             <small>${escapeHtml(entry.note)}</small>
           </div>
           <div class="leader-meta">
@@ -1156,7 +1181,10 @@ function renderChallenges() {
     <section class="challenge-shell">
       <div class="challenge-toolbar">
         <div class="metric-tabs">${tabsHtml}</div>
-        <div class="league-pill ${league.id}">League: ${escapeHtml(league.label)}</div>
+        <div class="league-pill ${league.id}">
+          <img class="rank-badge league-badge" src="${escapeAttr(leagueBadge)}" alt="League badge" loading="lazy" />
+          <span>League: ${escapeHtml(league.label)}</span>
+        </div>
       </div>
 
       <section class="podium-grid">
@@ -1235,6 +1263,22 @@ function animateChallengePodium() {
         yoyo: true,
         ease: "sine.inOut"
       });
+    });
+
+    gsap.utils.toArray(".podium-rank-badge").forEach((badge, idx) => {
+      gsap.fromTo(
+        badge,
+        { rotate: -5, y: -1, scale: 0.97 },
+        {
+          rotate: 5,
+          y: -3,
+          scale: 1.03,
+          duration: 1.6 + idx * 0.2,
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut"
+        }
+      );
     });
 
     const wings = gsap.utils.toArray(".podium-card .wing");
@@ -1326,6 +1370,7 @@ function renderProfile() {
   const tier = getUserTier();
   const profileXP = calculateUserPoints();
   const level = getUserLevel(profileXP);
+  const rankBadge = getRankBadgeAssetByLevel(level);
   const currentBandStart = level <= 1 ? 0 : xpRequiredForLevel(level);
   const nextLevelXP = xpRequiredForLevel(level + 1);
   const xpInBand = Math.max(0, profileXP - currentBandStart);
@@ -1345,7 +1390,10 @@ function renderProfile() {
         ${avatar}
         <div>
           <h3>${escapeHtml(state.userName)}</h3>
-          <p class="rank-line">${escapeHtml(tier.label)} • Level ${level} • ${profileXP} XP</p>
+          <div class="profile-rank-row">
+            <img class="rank-badge profile-rank-badge" src="${escapeAttr(rankBadge)}" alt="Rank badge" loading="lazy" />
+            <p class="rank-line">${escapeHtml(tier.label)} • Level ${level} • ${profileXP} XP</p>
+          </div>
           <p class="rank-line">XP المطلوب للمستوى التالي: ${nextLevelXP}</p>
           <div class="xp-track">
             <div class="xp-fill" style="width:${xpBandPercent}%"></div>
@@ -2217,6 +2265,24 @@ function getLeagueFromXP(points) {
   return { id: "bronze", label: "Bronze" };
 }
 
+function getRankBadgeIndexByLevel(level) {
+  const safeLevel = Math.max(1, Number(level) || 1);
+  if (safeLevel >= 30) return 5;
+  if (safeLevel >= 23) return 4;
+  if (safeLevel >= 16) return 3;
+  if (safeLevel >= 11) return 2;
+  if (safeLevel >= 6) return 1;
+  return 0;
+}
+
+function getRankBadgeAssetByLevel(level) {
+  return RANK_BADGE_ASSETS[getRankBadgeIndexByLevel(level)] || RANK_BADGE_ASSETS[0];
+}
+
+function getRankBadgeAssetByPoints(points) {
+  return getRankBadgeAssetByLevel(getUserLevel(points));
+}
+
 function buildPressureHint(above, below, gapAbove, gapBelow, unit) {
   if (below && gapBelow <= 25) {
     return {
@@ -2521,8 +2587,21 @@ function escapeAttr(text = "") {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  window.addEventListener("load", async () => {
+    try {
+      const swUrl = `./sw.js?v=${encodeURIComponent(BUILD_ID)}`;
+      const registration = await navigator.serviceWorker.register(swUrl, { updateViaCache: "none" });
+      registration.update().catch(() => {});
+
+      let refreshed = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (refreshed) return;
+        refreshed = true;
+        window.location.reload();
+      });
+    } catch {
+      // noop
+    }
   });
 }
 

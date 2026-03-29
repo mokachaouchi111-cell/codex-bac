@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Warrior rank badge">
+  <defs>
+    <linearGradient id="warrior-frame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5e9ff"/>
+      <stop offset="100%" stop-color="#a999ff"/>
+    </linearGradient>
+    <linearGradient id="warrior-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d2c68"/>
+      <stop offset="100%" stop-color="#10163c"/>
+    </linearGradient>
+    <linearGradient id="warrior-gem" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff8ee5"/>
+      <stop offset="100%" stop-color="#ff3d95"/>
+    </linearGradient>
+  </defs>
+  <polygon points="128,20 210,68 210,164 128,212 46,164 46,68" fill="url(#warrior-frame)" />
+  <polygon points="128,36 196,76 196,156 128,196 60,156 60,76" fill="url(#warrior-core)" />
+  <path d="M128 10 L147 38 L109 38 Z" fill="#dccaff" />
+  <circle cx="128" cy="24" r="8" fill="url(#warrior-gem)" />
+  <path d="M114 212 L128 234 L142 212 Z" fill="#f86cb8" />
+  <circle cx="128" cy="214" r="7" fill="url(#warrior-gem)" />
+  <ellipse cx="82" cy="195" rx="13" ry="6" transform="rotate(-35 82 195)" fill="#b7a3f5" />
+  <ellipse cx="96" cy="179" rx="12" ry="6" transform="rotate(-18 96 179)" fill="#b7a3f5" />
+  <ellipse cx="174" cy="195" rx="13" ry="6" transform="rotate(35 174 195)" fill="#b7a3f5" />
+  <ellipse cx="160" cy="179" rx="12" ry="6" transform="rotate(18 160 179)" fill="#b7a3f5" />
+</svg>

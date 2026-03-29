@@ -770,6 +770,12 @@ body {
   color: var(--text-soft);
 }
 
+.leader-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+}
+
 .leader-score {
   font-family: "Space Grotesk", "Cairo", sans-serif;
 }
@@ -829,10 +835,25 @@ body {
 
 .league-pill {
   border-radius: 999px;
-  padding: 0.22rem 0.6rem;
+  padding: 0.22rem 0.54rem;
   font-size: 0.78rem;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: var(--bg-panel-strong);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+}
+
+.rank-badge {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+}
+
+.league-badge {
+  width: 24px;
+  height: 24px;
 }
 
 .league-pill.bronze {
@@ -919,6 +940,12 @@ body {
 
 .podium-medal {
   font-size: 1.1rem;
+}
+
+.podium-rank-badge {
+  width: 50px;
+  height: 50px;
+  margin: 0 auto;
 }
 
 .podium-aura {
@@ -1120,6 +1147,11 @@ body {
   gap: 0.1rem;
 }
 
+.leader-rank-badge {
+  width: 22px;
+  height: 22px;
+}
+
 .leader-delta {
   font-size: 0.72rem;
 }
@@ -1173,6 +1205,18 @@ body {
 
 .profile-head p {
   margin: 0.2rem 0 0;
+}
+
+.profile-rank-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.18rem;
+}
+
+.profile-rank-badge {
+  width: 36px;
+  height: 36px;
 }
 
 .rank-line {
@@ -1906,6 +1950,11 @@ body {
     height: 48px;
   }
 
+  .podium-rank-badge {
+    width: 44px;
+    height: 44px;
+  }
+
   .wing {
     width: 72px;
     height: 64px;
@@ -1937,6 +1986,10 @@ body {
 
   .metric-tab small {
     font-size: 0.69rem;
+  }
+
+  .league-pill {
+    align-self: flex-start;
   }
 
   .focus-zone {

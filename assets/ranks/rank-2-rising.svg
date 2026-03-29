@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Rising rank badge">
+  <defs>
+    <linearGradient id="rising-frame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ecd9ff"/>
+      <stop offset="100%" stop-color="#9b88ff"/>
+    </linearGradient>
+    <linearGradient id="rising-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1b2558"/>
+      <stop offset="100%" stop-color="#0d1230"/>
+    </linearGradient>
+  </defs>
+  <polygon points="128,20 210,68 210,164 128,212 46,164 46,68" fill="url(#rising-frame)" />
+  <polygon points="128,36 196,76 196,156 128,196 60,156 60,76" fill="url(#rising-core)" />
+  <path d="M128 14 L146 38 L110 38 Z" fill="#d3bfff" />
+  <path d="M224 74 L198 88 L202 56 Z" fill="#b9a2ff" />
+  <path d="M224 158 L202 176 L198 146 Z" fill="#a28dff" />
+  <path d="M32 74 L58 88 L54 56 Z" fill="#b9a2ff" />
+  <path d="M32 158 L54 176 L58 146 Z" fill="#a28dff" />
+  <circle cx="128" cy="28" r="5" fill="#ff8ee5" />
+</svg>

@@ -22,6 +22,7 @@
   - بحث ذكي فوري
 - صفحة التحديات:
   - Podium للثلاثة الأوائل (Top 3)
+  - شارات رتب ديناميكية على الـ Podium + القائمة المحيطة + League Pill
   - Focus Zone يوضح ترتيب الطالب والفارق مع المركز الأعلى
   - قائمة محيطة مركزة (3 فوقك + أنت + 3 تحتك)
   - مؤشرات ضغط تنافسي (من يقترب منك / من يمكنك تجاوزه)
@@ -51,6 +52,30 @@
   - معادلة المستوى: `XP_required = 100 * (Level ^ 1.5)`
 - Service Worker للتخزين المؤقت وتسريع التنقل.
 
+## تخصيص شارات الرتب
+
+يمكنك استبدال الشارات الحالية مباشرة من هذا المسار:
+
+- `assets/ranks/rank-1-novice.svg`
+- `assets/ranks/rank-2-rising.svg`
+- `assets/ranks/rank-3-discipline.svg`
+- `assets/ranks/rank-4-warrior.svg`
+- `assets/ranks/rank-5-elite.svg`
+- `assets/ranks/rank-6-legend.svg`
+
+الربط البرمجي موجود في:
+
+- `app.js` داخل `RANK_BADGE_ASSETS`
+
+توزيع الشارات حسب المستوى:
+
+- `1-5` => Novice
+- `6-10` => Rising
+- `11-15` => Discipline
+- `16-22` => Warrior
+- `23-29` => Elite
+- `30+` => Legend
+
 ## تشغيل محلي
 
 ```powershell
@@ -60,6 +85,13 @@ py -m http.server 8080
 ثم افتح:
 
 `http://localhost:8080`
+
+## إذا لم تظهر التحديثات في Telegram
+
+1. افتح الرابط مع بارامتر نسخة جديد (مثال):  
+   `https://codex-bac.mokachaouchi111.workers.dev/?v=8`
+2. اغلق Mini App وافتحه من جديد.
+3. عند كل نشر جديد، غيّر قيمة `BUILD_ID` في `app.js` لفرض تحديث Service Worker.
 
 ## ربط Telegram Mini App
 

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Legend rank badge">
+  <defs>
+    <linearGradient id="legend-frame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f9efff"/>
+      <stop offset="100%" stop-color="#b1a2ff"/>
+    </linearGradient>
+    <linearGradient id="legend-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22337a"/>
+      <stop offset="100%" stop-color="#111945"/>
+    </linearGradient>
+    <radialGradient id="legend-ray" cx="50%" cy="38%" r="60%">
+      <stop offset="0%" stop-color="#88ddff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#88ddff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="legend-ribbon" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff4f9a"/>
+      <stop offset="100%" stop-color="#ff8c4a"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="128" cy="114" rx="118" ry="86" fill="url(#legend-ray)" />
+  <polygon points="128,20 210,68 210,164 128,212 46,164 46,68" fill="url(#legend-frame)" />
+  <polygon points="128,36 196,76 196,156 128,196 60,156 60,76" fill="url(#legend-core)" />
+  <path d="M22 106 L70 86 L92 106 L70 126 Z" fill="#ccbaff" />
+  <path d="M234 106 L186 86 L164 106 L186 126 Z" fill="#ccbaff" />
+  <path d="M36 80 L82 60 L108 82 L84 100 Z" fill="#b7a2ff" />
+  <path d="M220 80 L174 60 L148 82 L172 100 Z" fill="#b7a2ff" />
+  <path d="M106 214 L128 248 L150 214 Z" fill="url(#legend-ribbon)" />
+  <path d="M104 214 L90 246 L112 234 Z" fill="#ff4f9a" />
+  <path d="M152 214 L166 246 L144 234 Z" fill="#ffa34d" />
+  <path d="M96 16 L112 32 L128 14 L144 32 L160 16 L160 30 L96 30 Z" fill="#d8c7ff" />
+  <circle cx="128" cy="24" r="9" fill="#ff5cb3" />
+  <circle cx="128" cy="214" r="9" fill="#ff66b4" />
+</svg>

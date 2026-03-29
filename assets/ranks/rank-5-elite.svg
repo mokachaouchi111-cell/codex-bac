@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Elite rank badge">
+  <defs>
+    <linearGradient id="elite-frame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f7ecff"/>
+      <stop offset="100%" stop-color="#ab9cff"/>
+    </linearGradient>
+    <linearGradient id="elite-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1f2f6f"/>
+      <stop offset="100%" stop-color="#0f163f"/>
+    </linearGradient>
+    <radialGradient id="elite-glow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#8fd8ff" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#8fd8ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="128" cy="130" rx="102" ry="78" fill="url(#elite-glow)" />
+  <polygon points="128,20 210,68 210,164 128,212 46,164 46,68" fill="url(#elite-frame)" />
+  <polygon points="128,36 196,76 196,156 128,196 60,156 60,76" fill="url(#elite-core)" />
+  <path d="M128 8 L147 38 L109 38 Z" fill="#e4d4ff" />
+  <circle cx="128" cy="22" r="8" fill="#ff5bb2" />
+  <path d="M28 112 L72 94 L88 112 L72 130 Z" fill="#c6b4ff" opacity="0.85" />
+  <path d="M228 112 L184 94 L168 112 L184 130 Z" fill="#c6b4ff" opacity="0.85" />
+  <path d="M42 86 L84 68 L100 86 L84 102 Z" fill="#b39eff" opacity="0.88" />
+  <path d="M214 86 L172 68 L156 86 L172 102 Z" fill="#b39eff" opacity="0.88" />
+  <path d="M114 212 L128 236 L142 212 Z" fill="#f857a8" />
+  <circle cx="128" cy="215" r="8" fill="#ff71be" />
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Discipline rank badge">
+  <defs>
+    <linearGradient id="discipline-frame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0e1ff"/>
+      <stop offset="100%" stop-color="#a995ff"/>
+    </linearGradient>
+    <linearGradient id="discipline-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1c2a60"/>
+      <stop offset="100%" stop-color="#0e1436"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#cfbfff"/>
+      <stop offset="100%" stop-color="#8a79df"/>
+    </linearGradient>
+  </defs>
+  <polygon points="128,20 210,68 210,164 128,212 46,164 46,68" fill="url(#discipline-frame)" />
+  <polygon points="128,36 196,76 196,156 128,196 60,156 60,76" fill="url(#discipline-core)" />
+  <path d="M128 14 L146 38 L110 38 Z" fill="#d6c3ff" />
+  <circle cx="128" cy="28" r="6" fill="#ff72c8" />
+  <ellipse cx="84" cy="198" rx="13" ry="6" transform="rotate(-35 84 198)" fill="url(#leaf)" />
+  <ellipse cx="98" cy="182" rx="12" ry="6" transform="rotate(-20 98 182)" fill="url(#leaf)" />
+  <ellipse cx="114" cy="170" rx="11" ry="6" transform="rotate(-8 114 170)" fill="url(#leaf)" />
+  <ellipse cx="172" cy="198" rx="13" ry="6" transform="rotate(35 172 198)" fill="url(#leaf)" />
+  <ellipse cx="158" cy="182" rx="12" ry="6" transform="rotate(20 158 182)" fill="url(#leaf)" />
+  <ellipse cx="142" cy="170" rx="11" ry="6" transform="rotate(8 142 170)" fill="url(#leaf)" />
+  <path d="M77 204 Q128 226 179 204" stroke="#cdb7ff" stroke-width="5" fill="none" stroke-linecap="round" />
+</svg>
