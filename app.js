@@ -2,7 +2,7 @@
 import { corners, tracks } from "./data.js";
 
 const BAC_EXAM_DATE = "2026-06-14";
-const BUILD_ID = "2026-03-29-v9";
+const BUILD_ID = "2026-04-03-v12";
 
 const STORAGE_KEYS = {
   page: "codex_bac_page",
@@ -13,6 +13,8 @@ const STORAGE_KEYS = {
   lastRead: "codex_bac_last_read",
   quiz: "codex_bac_quiz_results",
   quizHistory: "codex_bac_quiz_history",
+  quizEngine: "codex_bac_quiz_engine",
+  quizHeatmap: "codex_bac_quiz_heatmap",
   profile: "codex_bac_profile",
   activity: "codex_bac_activity_minutes",
   seenAchievements: "codex_bac_seen_achievements",
@@ -112,6 +114,16 @@ const state = {
   lastRead: load(STORAGE_KEYS.lastRead, {}),
   quizResults: load(STORAGE_KEYS.quiz, {}),
   quizHistory: load(STORAGE_KEYS.quizHistory, []),
+  quizEngine: load(STORAGE_KEYS.quizEngine, {
+    mode: "chill",
+    combo: 0,
+    streak: 0,
+    bestCombo: 0,
+    run: null,
+    lastSummary: null,
+    ghost: null
+  }),
+  quizHeatmap: load(STORAGE_KEYS.quizHeatmap, {}),
   xp: load(STORAGE_KEYS.xp, {
     current: 0,
     lastLoginDate: "",
@@ -155,14 +167,20 @@ const state = {
 
 let coreReadTimer = null;
 let challengesAnimContext = null;
+let quizTimer = null;
+let quizFlashTimer = null;
 
 const el = {
   topbarSubtitle: document.getElementById("topbar-subtitle"),
   userChip: document.getElementById("user-chip"),
+  pageHome: document.getElementById("page-home"),
   homeUsername: document.getElementById("home-username"),
   bacCountdown: document.getElementById("bac-countdown"),
+  homeHeroActions: document.getElementById("home-hero-actions"),
+  homeHeroMeta: document.getElementById("home-hero-meta"),
   homeStats: document.getElementById("home-stats"),
   homeLastRead: document.getElementById("home-last-read"),
+  homePortals: document.getElementById("home-portals"),
   stage: document.getElementById("spa-stage"),
   pageProfile: document.getElementById("page-profile"),
   bottomNav: document.getElementById("bottom-nav"),
@@ -189,7 +207,8 @@ const el = {
   weeklyBoss: document.getElementById("weekly-boss"),
   personalNotes: document.getElementById("personal-notes"),
   themeToggle: document.getElementById("theme-toggle"),
-  toast: document.getElementById("toast")
+  toast: document.getElementById("toast"),
+  quickQuizFab: document.getElementById("quick-quiz-fab")
 };
 
 const PAGE_TITLES = {
@@ -232,6 +251,21 @@ function initState() {
   if (!state.profile.notes) state.profile.notes = "";
   if (!state.xp || typeof state.xp.current !== "number") {
     state.xp = { current: 0, lastLoginDate: "", boostDate: "" };
+  }
+  if (!state.quizEngine || typeof state.quizEngine !== "object") {
+    state.quizEngine = { mode: "chill", combo: 0, streak: 0, bestCombo: 0, run: null, lastSummary: null, ghost: null };
+  }
+  if (!["chill", "pressure"].includes(state.quizEngine.mode)) {
+    state.quizEngine.mode = "chill";
+  }
+  state.quizEngine.combo = Math.max(0, Number(state.quizEngine.combo) || 0);
+  state.quizEngine.streak = Math.max(0, Number(state.quizEngine.streak) || 0);
+  state.quizEngine.bestCombo = Math.max(state.quizEngine.bestCombo || 0, state.quizEngine.combo);
+  if (state.quizEngine.run && typeof state.quizEngine.run !== "object") {
+    state.quizEngine.run = null;
+  }
+  if (!state.quizHeatmap || typeof state.quizHeatmap !== "object") {
+    state.quizHeatmap = {};
   }
   if (!state.eventClaims || typeof state.eventClaims !== "object") {
     state.eventClaims = {};
@@ -283,6 +317,8 @@ function initState() {
 
   state.selectedUnitId = state.lastRead[state.trackId] || firstUnlockedUnit(getTrack())?.id || getTrack().units[0]?.id || null;
   save(STORAGE_KEYS.profile, state.profile);
+  save(STORAGE_KEYS.quizEngine, state.quizEngine);
+  save(STORAGE_KEYS.quizHeatmap, state.quizHeatmap);
   applyDailyLoginXP();
   ensureWeeklyBossState();
   ensureDailyTasksState();
@@ -300,7 +336,8 @@ function bindEvents() {
   el.searchInput.addEventListener("input", onSearchInput);
   el.searchResults.addEventListener("click", onSearchResultClick);
   el.leaderboard.addEventListener("click", onChallengesClick);
-  el.homeLastRead.addEventListener("click", onHomeActionClick);
+  el.pageHome.addEventListener("click", onHomeActionClick);
+  el.quickQuizFab?.addEventListener("click", onQuickQuizFabClick);
   el.themeToggle.addEventListener("click", onThemeToggleClick);
   el.personalNotes.addEventListener("input", onNotesInput);
   el.profileIdentity.addEventListener("click", onProfileIdentityClick);
@@ -318,7 +355,10 @@ function onBottomNavClick(event) {
   if (!button) return;
   const nextPage = button.dataset.pageTarget;
   if (!nextPage || nextPage === state.page) return;
+  setActivePage(nextPage);
+}
 
+function setActivePage(nextPage) {
   state.page = nextPage;
   if (state.page !== "challenges" && challengesAnimContext?.revert) {
     challengesAnimContext.revert();
@@ -330,6 +370,7 @@ function onBottomNavClick(event) {
   }
   if (state.page !== "curriculum") {
     finalizeCoreReadSession();
+    stopQuizTimer();
   }
   render();
 }
@@ -340,6 +381,7 @@ function onTrackClick(event) {
 
   state.trackId = btn.dataset.trackId;
   finalizeCoreReadSession();
+  stopQuizTimer();
   save(STORAGE_KEYS.track, state.trackId);
 
   const grouped = groupUnitsByDomain(getTrack());
@@ -377,6 +419,7 @@ function onUnitClick(event) {
   }
 
   finalizeCoreReadSession();
+  stopQuizTimer();
   state.selectedUnitId = unitId;
   state.activeCorner = "core";
   state.lastRead[state.trackId] = unitId;
@@ -393,8 +436,14 @@ function onDetailClick(event) {
     if (prevCorner === "core" && state.activeCorner !== "core") {
       finalizeCoreReadSession();
     }
+    if (prevCorner === "boss" && state.activeCorner !== "boss") {
+      stopQuizTimer();
+    }
     if (state.activeCorner === "core") {
       startCoreReadSession();
+    }
+    if (state.activeCorner === "boss") {
+      startQuizTimer();
     }
     if (state.activeCorner === "flash") {
       const currentUnit = getSelectedUnit();
@@ -438,9 +487,47 @@ function onDetailClick(event) {
     return;
   }
 
-  const quizBtn = event.target.closest("button[data-action='check-quiz']");
-  if (quizBtn) {
-    checkQuiz();
+  const answerBtn = event.target.closest("button[data-action='quiz-answer']");
+  if (answerBtn) {
+    const choice = Number(answerBtn.dataset.choice);
+    submitQuizAnswer(choice);
+    return;
+  }
+
+  const nextBtn = event.target.closest("button[data-action='quiz-next']");
+  if (nextBtn) {
+    moveQuizNext();
+    return;
+  }
+
+  const modeBtn = event.target.closest("button[data-action='quiz-mode']");
+  if (modeBtn) {
+    setQuizMode(modeBtn.dataset.mode);
+    return;
+  }
+
+  const powerBtn = event.target.closest("button[data-action='quiz-powerup']");
+  if (powerBtn) {
+    useQuizPowerup(powerBtn.dataset.powerup);
+    return;
+  }
+
+  const explainBtn = event.target.closest("button[data-action='quiz-toggle-explain']");
+  if (explainBtn) {
+    toggleQuizExplanation();
+    return;
+  }
+
+  const restartBtn = event.target.closest("button[data-action='quiz-restart']");
+  if (restartBtn) {
+    startNewQuizRun();
+    return;
+  }
+
+  const ghostBtn = event.target.closest("button[data-action='quiz-ghost']");
+  if (ghostBtn) {
+    showToast("Ghost Challenge قيد الربط الجماعي. قريباً في نسخة السيرفر.");
+    return;
   }
 
   const exerciseBtn = event.target.closest("button[data-action='complete-exercise']");
@@ -462,6 +549,7 @@ function onDetailClick(event) {
 
 function onBackToSubjects() {
   finalizeCoreReadSession();
+  stopQuizTimer();
   state.selectedUnitId = null;
   renderDetail();
 }
@@ -521,6 +609,27 @@ function onChallengesClick(event) {
 }
 
 function onHomeActionClick(event) {
+  const pageBtn = event.target.closest("[data-action='open-page']");
+  if (pageBtn) {
+    const nextPage = pageBtn.dataset.page;
+    if (nextPage) {
+      setActivePage(nextPage);
+      if (pageBtn.dataset.focus === "notes") {
+        requestAnimationFrame(() => {
+          el.personalNotes?.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.personalNotes?.focus();
+        });
+      }
+    }
+    return;
+  }
+
+  const quickBtn = event.target.closest("[data-action='open-quick-quiz']");
+  if (quickBtn) {
+    openQuickQuiz();
+    return;
+  }
+
   const btn = event.target.closest("[data-action='resume-last']");
   if (!btn) return;
 
@@ -529,15 +638,47 @@ function onHomeActionClick(event) {
   const unit = findUnitById(trackId, unitId);
   if (!unit) return;
 
-  state.page = "curriculum";
+  setActivePage("curriculum");
   state.trackId = trackId;
   state.selectedSubject = unit.domain;
   state.selectedUnitId = unit.id;
   state.activeCorner = "core";
+  save(STORAGE_KEYS.track, state.trackId);
+  save(STORAGE_KEYS.subject, state.selectedSubject);
+  state.lastRead[state.trackId] = unit.id;
+  save(STORAGE_KEYS.lastRead, state.lastRead);
+  render();
+}
+
+function onQuickQuizFabClick() {
+  openQuickQuiz();
+}
+
+function openQuickQuiz() {
+  const target = findBestQuizTarget();
+  if (!target) {
+    state.page = "curriculum";
+    save(STORAGE_KEYS.page, state.page);
+    render();
+    showToast("لا يوجد كويز متاح حالياً. أكمل وحدة لفتح ركن التحدي.");
+    return;
+  }
+
+  finalizeCoreReadSession();
+  state.page = "curriculum";
+  state.trackId = target.trackId;
+  state.selectedSubject = target.unit.domain;
+  state.selectedUnitId = target.unit.id;
+  state.activeCorner = "boss";
+  state.lastRead[target.trackId] = target.unit.id;
+
   save(STORAGE_KEYS.page, state.page);
   save(STORAGE_KEYS.track, state.trackId);
   save(STORAGE_KEYS.subject, state.selectedSubject);
+  save(STORAGE_KEYS.lastRead, state.lastRead);
+
   render();
+  showToast(`⚡ تم فتح كويز: ${target.unit.title}`);
 }
 
 function onThemeToggleClick() {
@@ -684,14 +825,19 @@ function onDocumentClick(event) {
 function onVisibilityChange() {
   if (document.hidden) {
     finalizeCoreReadSession();
+    stopQuizTimer();
     flushActivitySession();
   } else {
     state.sessionStartedAt = Date.now();
+    if (state.page === "curriculum" && state.activeCorner === "boss") {
+      startQuizTimer();
+    }
   }
 }
 
 function onBeforeUnload() {
   finalizeCoreReadSession();
+  stopQuizTimer();
   flushActivitySession();
 }
 
@@ -728,6 +874,12 @@ function renderPageOnly() {
   el.topbarSubtitle.textContent = PAGE_TITLES[state.page] || PAGE_TITLES.home;
   el.userChip.textContent = state.userName;
   el.homeUsername.textContent = state.userName;
+  document.body.dataset.page = state.page;
+
+  if (el.quickQuizFab) {
+    const hideOnActiveQuiz = state.page === "curriculum" && state.activeCorner === "boss";
+    el.quickQuizFab.classList.toggle("show", !hideOnActiveQuiz);
+  }
 }
 
 function renderHome() {
@@ -739,50 +891,138 @@ function renderHome() {
   const progressTrack = Math.round((doneTrack / totalTrack) * 100);
   const streak = getStreakDays();
   const points = calculateUserPoints();
+  const currentScore = calculateCurrentScoreFromXP();
+  const level = getUserLevel(points);
+  const tier = getUserTier();
+  const league = getLeagueFromXP(points);
   const days = daysRemaining(BAC_EXAM_DATE);
+  ensureWeeklyBossState();
+  const boss = state.weeklyBoss;
+  const bossPct = boss
+    ? Math.round(
+        (
+          Math.min(100, Math.round((boss.unitsDone / boss.unitsTarget) * 100)) +
+          Math.min(100, Math.round((boss.quizDone / boss.quizTarget) * 100))
+        ) / 2
+      )
+    : 0;
 
   el.bacCountdown.textContent = days > 0 ? `${days} يوم` : "بدأت فترة الامتحان";
-
-  el.homeStats.innerHTML = `
-    <article class="glass stat-card">
-      <h3>التقدم العام</h3>
-      <strong>${Math.round((doneAll / totalAll) * 100)}%</strong>
-      <small>${doneAll} / ${totalAll} وحدة</small>
-    </article>
-    <article class="glass stat-card">
-      <h3>مسار ${escapeHtml(track.name)}</h3>
-      <strong>${progressTrack}%</strong>
-      <small>${doneTrack} / ${totalTrack}</small>
-    </article>
-    <article class="glass stat-card">
-      <h3>نقاطك الحالية</h3>
-      <strong>${points}</strong>
-      <small>XP</small>
-    </article>
-    <article class="glass stat-card">
-      <h3>سلسلة المراجعة</h3>
-      <strong>${streak}</strong>
-      <small>أيام متتالية</small>
-    </article>
-  `;
 
   const lastTrackId = Object.keys(state.lastRead).find((trackId) => state.lastRead[trackId]) || state.trackId;
   const lastUnitId = state.lastRead[lastTrackId];
   const lastUnit = findUnitById(lastTrackId, lastUnitId);
+  const lastTrack = tracks.find((x) => x.id === lastTrackId) || track;
+  const quickTarget = findBestQuizTarget();
+  const quickQuizLabel = quickTarget ? `كويز: ${quickTarget.unit.title}` : "افتح أول كويز متاح";
+  const primaryAction = lastUnit
+    ? `<button class="primary-btn hero-cta" data-action="resume-last" data-track-id="${lastTrack.id}" data-unit-id="${lastUnit.id}" type="button">واصل ${escapeHtml(lastUnit.title)}</button>`
+    : `<button class="primary-btn hero-cta" data-action="open-page" data-page="curriculum" type="button">ابدأ من المنهج</button>`;
+
+  el.homeHeroActions.innerHTML = `
+    ${primaryAction}
+    <button class="quiz-quick-btn hero-cta alt" data-action="open-quick-quiz" type="button">⚡ ${escapeHtml(quickQuizLabel)}</button>
+  `;
+
+  el.homeHeroMeta.innerHTML = `
+    <article class="hero-meta-card hero-meta-track">
+      <small>المسار النشط</small>
+      <strong>${escapeHtml(track.name)}</strong>
+      <span>${doneTrack}/${totalTrack} وحدة</span>
+    </article>
+    <article class="hero-meta-card hero-meta-level">
+      <small>الرتبة الحالية</small>
+      <strong>${escapeHtml(tier.label)}</strong>
+      <span>Level ${level} • ${league.label}</span>
+    </article>
+    <article class="hero-meta-card hero-meta-boss">
+      <small>Boss الأسبوع</small>
+      <strong>${bossPct}%</strong>
+      <span>${boss?.completed ? "جاهز للاستلام" : "قيد التقدم"}</span>
+    </article>
+  `;
+
+  el.homeStats.innerHTML = `
+    <article class="glass stat-card utility-card">
+      <h3>التقدم العام</h3>
+      <strong>${Math.round((doneAll / totalAll) * 100)}%</strong>
+      <small>${doneAll} / ${totalAll} وحدة</small>
+    </article>
+    <article class="glass stat-card utility-card">
+      <h3>XP الحالي</h3>
+      <strong>${points}</strong>
+      <small>${escapeHtml(tier.label)} • Level ${level}</small>
+    </article>
+    <article class="glass stat-card utility-card">
+      <h3>سلسلة المراجعة</h3>
+      <strong>${streak}</strong>
+      <small>أيام متتالية</small>
+    </article>
+    <article class="glass stat-card utility-card">
+      <h3>المعدل المتوقع</h3>
+      <strong>${currentScore.toFixed(1)}/20</strong>
+      <small>${progressTrack}% في ${escapeHtml(track.name)}</small>
+    </article>
+  `;
 
   if (!lastUnit) {
     el.homeLastRead.innerHTML = `
-      <h3>آخر درس</h3>
-      <p>لم تبدأ بعد. افتح صفحة المنهج واختر أول وحدة.</p>
+      <div class="support-card-head">
+        <div>
+          <small class="support-kicker">Daily Route</small>
+          <h3>بداية نظيفة ومنظمة</h3>
+        </div>
+        <span class="support-badge">جاهز</span>
+      </div>
+      <p>لم تبدأ بعد. افتح المنهج لاختيار أول وحدة، أو ادخل مباشرة إلى أول كويز متاح إذا أردت انطلاقة سريعة.</p>
+      <div class="home-action-row">
+        <button class="primary-btn" data-action="open-page" data-page="curriculum" type="button">فتح المنهج</button>
+        <button class="quiz-quick-btn" data-action="open-quick-quiz" type="button">⚡ كويز سريع</button>
+      </div>
     `;
-    return;
+  } else {
+    el.homeLastRead.innerHTML = `
+      <div class="support-card-head">
+        <div>
+          <small class="support-kicker">Next Step</small>
+          <h3>خطوتك الحالية</h3>
+        </div>
+        <span class="support-badge">${escapeHtml(track.name)}</span>
+      </div>
+      <p><strong>${escapeHtml(lastUnit.title)}</strong> ضمن ${escapeHtml(lastTrack.name)}. الهدف الآن: أكمل هذه الوحدة أو ادخل إلى ركن التحدي الخاص بها.</p>
+      <div class="home-pathline">
+        <span>الترتيب: ${escapeHtml(tier.label)}</span>
+        <span>Boss الأسبوع: ${bossPct}%</span>
+        <span>الكويز المقترح: ${escapeHtml(quickTarget?.unit.title || "غير متاح بعد")}</span>
+      </div>
+      <div class="home-action-row">
+        <button class="primary-btn" data-action="resume-last" data-track-id="${lastTrack.id}" data-unit-id="${lastUnit.id}" type="button">متابعة الآن</button>
+        <button class="quiz-quick-btn" data-action="open-quick-quiz" type="button">⚡ كويز سريع</button>
+      </div>
+    `;
   }
 
-  const t = tracks.find((x) => x.id === lastTrackId);
-  el.homeLastRead.innerHTML = `
-    <h3>استكمل من حيث توقفت</h3>
-    <p><strong>${escapeHtml(lastUnit.title)}</strong> • ${escapeHtml(t.name)}</p>
-    <button class="primary-btn" data-action="resume-last" data-track-id="${t.id}" data-unit-id="${lastUnit.id}" type="button">متابعة الآن</button>
+  el.homePortals.innerHTML = `
+    <button class="portal-card portal-curriculum glass" type="button" data-action="open-page" data-page="curriculum">
+      <span class="portal-icon">⌘</span>
+      <strong>المنهج</strong>
+      <small>ادخل مباشرة إلى الوحدات وشجرة المعرفة.</small>
+    </button>
+    <button class="portal-card portal-quiz glass" type="button" data-action="open-quick-quiz">
+      <span class="portal-icon">◈</span>
+      <strong>الكويزات</strong>
+      <small>ابدأ اختبارًا سريعًا في أقرب وحدة متاحة.</small>
+    </button>
+    <button class="portal-card portal-challenges glass" type="button" data-action="open-page" data-page="challenges">
+      <span class="portal-icon">△</span>
+      <strong>التحديات</strong>
+      <small>تابع ترتيبك والمنافس الأقرب لك الآن.</small>
+    </button>
+    <button class="portal-card portal-notes glass" type="button" data-action="open-page" data-page="profile" data-focus="notes">
+      <span class="portal-icon">✦</span>
+      <strong>الملاحظات</strong>
+      <small>احفظ أفكارك السريعة وقوانينك الذهبية.</small>
+    </button>
   `;
 }
 
@@ -884,6 +1124,7 @@ function renderDetail() {
   const track = getTrack();
 
   if (!unit) {
+    stopQuizTimer();
     el.detail.innerHTML = `
       <div class="empty-state">
         <h3>اختر وحدة</h3>
@@ -932,7 +1173,13 @@ function renderDetail() {
 
   if (state.activeCorner === "core") {
     startCoreReadSession();
+    return;
   }
+  if (state.activeCorner === "boss") {
+    startQuizTimer();
+    return;
+  }
+  stopQuizTimer();
 }
 function renderCornerContent(unit, cornerId) {
   const waiting = unit.placeholderFor?.includes(cornerId);
@@ -974,35 +1221,7 @@ function renderCornerContent(unit, cornerId) {
   if (cornerId === "boss") {
     const questions = unit.content.boss?.questions || [];
     if (!questions.length) return renderPlaceholder(unit, cornerId);
-    const last = state.quizResults[unit.id];
-    return `
-      <div class="corner-panel quiz">
-        <h3>Final Boss Quiz</h3>
-        <form id="quiz-form">
-          ${questions
-            .map(
-              (question, index) => `
-            <fieldset>
-              <legend>${index + 1}. ${escapeHtml(question.q)}</legend>
-              ${question.options
-                .map(
-                  (option, oi) => `
-                <label>
-                  <input type="radio" name="q-${index}" value="${oi}" />
-                  <span>${escapeHtml(option)}</span>
-                </label>
-              `
-                )
-                .join("")}
-            </fieldset>
-          `
-            )
-            .join("")}
-          <button type="button" class="quiz-btn" data-action="check-quiz">احسب نتيجتي</button>
-        </form>
-        ${last ? `<p class="quiz-result">آخر نتيجة: <strong>${last.score}/${last.total}</strong> (${last.percent}%)</p>` : ""}
-      </div>
-    `;
+    return renderQuizArena(unit);
   }
 
   return `<div class="corner-panel"><p>قيد التحضير.</p></div>`;
@@ -1119,6 +1338,14 @@ function renderChallenges() {
     .join("");
 
   const leagueBadge = LEAGUE_BADGE_BY_ID[league.id] || RANK_BADGE_ASSETS[0];
+  const directRival = above || below || me;
+  const directRivalGap = above ? gapAbove : below ? gapBelow : 0;
+  const directRivalTone = above ? "push" : below ? "danger" : "top";
+  const directRivalCopy = above
+    ? `تفصلك ${formatXP(gapAbove)} فقط عن ${above.name}. هذا هو هدفك الأقرب اليوم.`
+    : below
+      ? `${below.name} خلفك بفارق ${formatXP(gapBelow)} فقط. احمِ موقعك قبل أن يتجاوزك.`
+      : "أنت المرجع الآن. استمر في جمع XP لتحافظ على القمة.";
 
   const podiumHtml = podiumOrder
     .map((entry) => {
@@ -1180,57 +1407,77 @@ function renderChallenges() {
 
   el.leaderboard.innerHTML = `
     <section class="challenge-shell">
-      <div class="challenge-toolbar">
-        <div class="board-tabs">${modesHtml}</div>
-        <div class="league-stack">
-          <button class="league-pill ${league.id}" type="button" data-action="toggle-league-tip" aria-expanded="${state.challengeLeagueTipOpen ? "true" : "false"}">
-            <img class="rank-badge league-badge" src="${escapeAttr(leagueBadge)}" alt="League badge" loading="lazy" />
-            <span>League: ${escapeHtml(league.label)}</span>
-          </button>
-          <div class="league-tip ${state.challengeLeagueTipOpen ? "show" : ""}">
-            ${
-              leagueProgress
-                ? `اجمع <strong>${formatXP(leagueProgress.remaining)}</strong> للترقية إلى دوري <strong>${escapeHtml(leagueProgress.nextLabel)}</strong>.`
-                : "أنت في أعلى دوري حالياً. استمر للحفاظ على موقعك."
-            }
+      <section class="challenge-hero">
+        <div class="challenge-hero-copy">
+          <div class="challenge-toolbar">
+            <div class="board-tabs">${modesHtml}</div>
+            <div class="league-stack">
+              <button class="league-pill ${league.id}" type="button" data-action="toggle-league-tip" aria-expanded="${state.challengeLeagueTipOpen ? "true" : "false"}">
+                <img class="rank-badge league-badge" src="${escapeAttr(leagueBadge)}" alt="League badge" loading="lazy" />
+                <span>League: ${escapeHtml(league.label)}</span>
+              </button>
+              <div class="league-tip ${state.challengeLeagueTipOpen ? "show" : ""}">
+                ${
+                  leagueProgress
+                    ? `اجمع <strong>${formatXP(leagueProgress.remaining)}</strong> للترقية إلى دوري <strong>${escapeHtml(leagueProgress.nextLabel)}</strong>.`
+                    : "أنت في أعلى دوري حالياً. استمر للحفاظ على موقعك."
+                }
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-
-      <p class="challenge-mode-note">${escapeHtml(modeMeta.label)} • الترتيب يعتمد على XP فقط</p>
-
-      <section class="podium-grid">
-        ${podiumHtml}
-      </section>
-
-      <section class="focus-zone">
-        <div class="focus-main">
-          <h3>🎯 ترتيبك الآن: #${me.rank}</h3>
+          <p class="challenge-mode-note">${escapeHtml(modeMeta.label)} • الترتيب يعتمد على XP فقط</p>
+          <h3 class="challenge-hero-title">مسرح التحدي الشخصي</h3>
           <p class="rival-line">${chaseTarget}</p>
-          <p class="focus-pressure ${pressure.className}">${escapeHtml(pressure.message)}</p>
-        </div>
-        <div class="focus-stats">
-          <div>
-            <small>قيمة الترتيب الحالية</small>
-            <strong>${formatXP(me.score)}</strong>
+          <article class="direct-rival-card ${directRivalTone}">
+            <div>
+              <small>المنافس المباشر</small>
+              <strong>${escapeHtml(directRival.name)}</strong>
+              <p>${escapeHtml(directRivalCopy)}</p>
+            </div>
+            <div class="direct-rival-meta">
+              <span>${directRival.isMe ? "أنت" : `#${directRival.rank}`}</span>
+              <strong>${formatXP(directRival.score)}</strong>
+            </div>
+          </article>
+          <div class="challenge-cta-row">
+            <button class="quiz-btn duel-btn" type="button" data-action="start-duel" data-rival="${escapeAttr(above?.name || below?.name || "")}">
+              ${above ? `تجاوز ${escapeHtml(above.name)} اليوم` : below ? `احمِ موقعك ضد ${escapeHtml(below.name)}` : "أنت المتصدر اليوم"}
+            </button>
+            <p class="focus-pressure ${pressure.className}">${escapeHtml(pressure.message)}</p>
           </div>
-          <div>
+        </div>
+        <div class="challenge-hero-stats">
+          <article class="challenge-stat-card">
+            <small>ترتيبك الآن</small>
+            <strong>#${me.rank}</strong>
+            <span>${formatXP(me.score)}</span>
+          </article>
+          <article class="challenge-stat-card">
             <small>الفارق للأعلى</small>
             <strong>${above ? formatXP(gapAbove) : "0 XP"}</strong>
-          </div>
-          <div>
+            <span>${above ? escapeHtml(above.name) : "أنت أولاً"}</span>
+          </article>
+          <article class="challenge-stat-card">
             <small>الفارق للأسفل</small>
             <strong>${below ? formatXP(gapBelow) : "0 XP"}</strong>
-          </div>
+            <span>${below ? escapeHtml(below.name) : "لا أحد خلفك"}</span>
+          </article>
         </div>
-        <button class="quiz-btn duel-btn" type="button" data-action="start-duel" data-rival="${escapeAttr(above?.name || "")}">
-          ${above ? `من ستهزمه اليوم؟ ${escapeHtml(above.name)}` : "أنت المتصدر اليوم"}
-        </button>
+      </section>
+
+      <section class="challenge-support">
+        <header class="list-head support">
+          <h3>منصة التتويج</h3>
+          <small>أفضل 3 لاعبين في ${escapeHtml(modeMeta.label)}</small>
+        </header>
+        <section class="podium-grid">
+          ${podiumHtml}
+        </section>
       </section>
 
       <section class="challenge-list-wrap">
         <header class="list-head">
-          <h3>📋 القائمة المحيطة بك</h3>
+          <h3>القائمة المحيطة بك</h3>
           <small>3 فوقك + أنت + 3 تحتك</small>
         </header>
         <div class="leaderboard nearby">
@@ -1399,6 +1646,9 @@ function renderProfile() {
   const tier = getUserTier();
   const profileXP = calculateUserPoints();
   const level = getUserLevel(profileXP);
+  const streak = getStreakDays();
+  const league = getLeagueFromXP(profileXP);
+  const currentScore = calculateCurrentScoreFromXP();
   const rankBadge = getRankBadgeAssetByLevel(level);
   const currentBandStart = level <= 1 ? 0 : xpRequiredForLevel(level);
   const nextLevelXP = xpRequiredForLevel(level + 1);
@@ -1415,25 +1665,52 @@ function renderProfile() {
 
   el.profileIdentity.innerHTML = `
     <div class="identity-shell ${tier.id}">
-      <div class="profile-head">
-        ${avatar}
-        <div>
-          <h3>${escapeHtml(state.userName)}</h3>
-          <div class="profile-rank-row">
-            <img class="rank-badge profile-rank-badge" src="${escapeAttr(rankBadge)}" alt="Rank badge" loading="lazy" />
-            <p class="rank-line">${escapeHtml(tier.label)} • Level ${level} • ${profileXP} XP</p>
-          </div>
-          <p class="rank-line">XP المطلوب للمستوى التالي: ${nextLevelXP}</p>
-          <div class="xp-track">
-            <div class="xp-fill" style="width:${xpBandPercent}%"></div>
-            <span>${xpBandPercent}%</span>
-          </div>
-          <p class="title-line">${escapeHtml(title)}</p>
-        </div>
+      <div class="identity-motif" aria-hidden="true">
+        <span class="motif-orbit motif-a"></span>
+        <span class="motif-orbit motif-b"></span>
+        <span class="motif-grid"></span>
       </div>
-      <div class="floating-badges">
-        <button class="floating-badge" type="button" data-action="quick-edit" data-field="branch">${escapeHtml(branch)}</button>
-        <button class="floating-badge" type="button" data-action="quick-edit" data-field="wilaya">${escapeHtml(state.profile.wilaya)}</button>
+      <div class="identity-hero-grid">
+        <div class="identity-main">
+          <div class="profile-head">
+            ${avatar}
+            <div>
+              <h3>${escapeHtml(state.userName)}</h3>
+              <div class="profile-rank-row">
+                <img class="rank-badge profile-rank-badge" src="${escapeAttr(rankBadge)}" alt="Rank badge" loading="lazy" />
+                <p class="rank-line">${escapeHtml(tier.label)} • Level ${level} • ${profileXP} XP</p>
+              </div>
+              <p class="rank-line">XP المطلوب للمستوى التالي: ${nextLevelXP}</p>
+              <div class="xp-track">
+                <div class="xp-fill" style="width:${xpBandPercent}%"></div>
+                <span>${xpBandPercent}%</span>
+              </div>
+              <p class="title-line">${escapeHtml(title)}</p>
+            </div>
+          </div>
+          <div class="floating-badges">
+            <button class="floating-badge" type="button" data-action="quick-edit" data-field="branch">${escapeHtml(branch)}</button>
+            <button class="floating-badge" type="button" data-action="quick-edit" data-field="wilaya">${escapeHtml(state.profile.wilaya)}</button>
+            <span class="floating-badge static">${escapeHtml(league.label)} League</span>
+          </div>
+        </div>
+        <div class="identity-side">
+          <article class="identity-stat-tile">
+            <small>الهوية الحالية</small>
+            <strong>${escapeHtml(tier.label)}</strong>
+            <span>لقب يتطور مع مستواك</span>
+          </article>
+          <article class="identity-stat-tile">
+            <small>لهب الاستمرارية</small>
+            <strong>${streak} يوم</strong>
+            <span>كل دخول يومي يبني حضورك</span>
+          </article>
+          <article class="identity-stat-tile">
+            <small>المعدل المتوقع</small>
+            <strong>${currentScore.toFixed(1)}/20</strong>
+            <span>مقابل هدف ${Number(state.profile.targetScore || 17)}/20</span>
+          </article>
+        </div>
       </div>
       <div class="profile-form">
         <label>
@@ -1477,12 +1754,40 @@ function renderProfile() {
   renderWeeklyBoss();
   el.personalNotes.value = state.profile.notes || "";
   el.themeToggle.textContent = `الوضع الحالي: ${state.theme === "dark" ? "Dark" : "Light"} (اضغط للتبديل)`;
+  organizeProfileLayout();
 
   if (!state.hasRenderedProfileOnce) {
     unlocked.forEach((id) => state.seenAchievements.add(id));
     save(STORAGE_KEYS.seenAchievements, [...state.seenAchievements]);
     state.hasRenderedProfileOnce = true;
   }
+}
+
+function organizeProfileLayout() {
+  const layout = el.pageProfile?.querySelector(".profile-layout");
+  if (!layout) return;
+
+  const cards = Array.from(layout.querySelectorAll(".page-card"));
+  if (cards.length < 5) return;
+
+  cards.forEach((card) => layout.appendChild(card));
+  layout.querySelectorAll(".profile-cluster").forEach((cluster) => cluster.remove());
+
+  const heroCard = cards[0];
+  const analyticsCards = [cards[1], cards[3]].filter(Boolean);
+  const progressCards = cards.filter((_, index) => ![0, 1, 3].includes(index));
+
+  const analyticsCluster = document.createElement("section");
+  analyticsCluster.className = "profile-cluster profile-analytics-cluster";
+  analyticsCards.forEach((card) => analyticsCluster.appendChild(card));
+
+  const progressCluster = document.createElement("section");
+  progressCluster.className = "profile-cluster profile-progress-cluster";
+  progressCards.forEach((card) => progressCluster.appendChild(card));
+
+  layout.appendChild(heroCard);
+  layout.appendChild(analyticsCluster);
+  layout.appendChild(progressCluster);
 }
 
 function renderConsistencyMatrix() {
@@ -1809,29 +2114,393 @@ function finalizeCoreReadSession() {
   state.activeCoreSession = null;
 }
 
-function checkQuiz() {
+const PRESSURE_QUESTION_SECONDS = 18;
+
+function getQuizQuestions(unit) {
+  return unit?.content?.boss?.questions || [];
+}
+
+function getQuizQuestionKey(unitId, index) {
+  return `${unitId}:${index}`;
+}
+
+function getQuestionExplanation(question) {
+  if (question?.explanation) return question.explanation;
+  const correctText = question?.options?.[question?.answer] || "";
+  return `الإجابة الصحيحة هي "${correctText}". راجع الفكرة الأساسية في الدرس ثم أعد المحاولة.`;
+}
+
+function getQuestionHint(question) {
+  if (question?.hint) return question.hint;
+  const options = question?.options || [];
+  if (!options.length) return "ركز على الكلمات المفتاحية في السؤال.";
+  const correctText = options[question.answer] || "";
+  const firstWord = correctText.split(" ")[0] || correctText;
+  return `تلميح: الإجابة الصحيحة تبدأ بـ "${firstWord}".`;
+}
+
+function startNewQuizRun(options = {}) {
   const unit = getSelectedUnit();
   if (!unit) return;
-  const questions = unit.content.boss?.questions || [];
+  const questions = getQuizQuestions(unit);
   if (!questions.length) return;
+  state.quizEngine.run = {
+    unitId: unit.id,
+    questionIndex: 0,
+    answers: {},
+    correctCount: 0,
+    wrongCount: 0,
+    questionStartedAt: Date.now(),
+    deadlineAt: state.quizEngine.mode === "pressure" ? Date.now() + PRESSURE_QUESTION_SECONDS * 1000 : null,
+    responseTimes: [],
+    pendingBonusXp: 0,
+    feedback: null,
+    showExplanation: false,
+    hintVisible: false,
+    eliminatedOptions: [],
+    usedPowerups: { fifty: false, hint: false },
+    flash: null,
+    finished: false,
+    summary: null
+  };
+  save(STORAGE_KEYS.quizEngine, state.quizEngine);
+  if (!options.skipRender) {
+    renderDetail();
+  }
+  return state.quizEngine.run;
+}
 
-  const form = document.getElementById("quiz-form");
-  if (!form) return;
+function renderQuizArena(unit) {
+  const questions = getQuizQuestions(unit);
+  if (!questions.length) return `<div class="corner-panel"><p>لا توجد أسئلة حالياً.</p></div>`;
 
-  let score = 0;
-  questions.forEach((question, index) => {
-    const selected = form.querySelector(`input[name="q-${index}"]:checked`);
-    if (selected && Number(selected.value) === question.answer) score += 1;
-  });
+  if (!state.quizEngine.run || state.quizEngine.run.unitId !== unit.id) {
+    startNewQuizRun({ skipRender: true });
+  }
+  const run = state.quizEngine.run;
+  if (!run) return `<div class="corner-panel"><p>جاري تهيئة الكويز...</p></div>`;
 
-  const percent = Math.round((score / questions.length) * 100);
-  state.quizResults[unit.id] = { score, total: questions.length, percent };
+  if (run.finished) {
+    const summary = run.summary || state.quizEngine.lastSummary || { score: 0, total: questions.length, percent: 0, bonusXp: 0 };
+    const ghost = state.quizEngine.ghost;
+    return `
+      <div class="quiz-shell minimal summary">
+        <h3>انتهى الكويز ✅</h3>
+        <p class="quiz-summary-line">نتيجتك: <strong>${summary.score}/${summary.total}</strong> (${summary.percent}%)</p>
+        <p class="quiz-summary-line">مكافآت الجولة: <strong>+${summary.bonusXp || 0} XP</strong></p>
+        <p class="quiz-summary-line">أفضل كومبو: <strong>${state.quizEngine.bestCombo}</strong></p>
+        ${
+          ghost?.avgMs
+            ? `<p class="quiz-summary-line">Ghost Speed: <strong>${(ghost.avgMs / 1000).toFixed(1)}s</strong> متوسط الإجابة</p>`
+            : ""
+        }
+        <div class="quiz-summary-actions">
+          <button class="quiz-btn" type="button" data-action="quiz-restart">إعادة الجولة</button>
+          <button class="ghost-btn" type="button" data-action="quiz-ghost">Ghost Challenge</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const index = Math.max(0, Math.min(questions.length - 1, run.questionIndex || 0));
+  const question = questions[index];
+  const answered = Object.prototype.hasOwnProperty.call(run.answers || {}, index);
+  const selectedChoice = answered ? run.answers[index] : null;
+  const pressureSec = state.quizEngine.mode === "pressure" ? getQuizRemainingSeconds(run) : null;
+  const progressPct = Math.round(((index + 1) / questions.length) * 100);
+  const flash = run.flash && Date.now() - run.flash.at < 1500 ? run.flash : null;
+  const qKey = getQuizQuestionKey(unit.id, index);
+  const heat = getQuestionHeatRate(qKey);
+  const comboClass = state.quizEngine.combo >= 10 ? "combo-ascension" : state.quizEngine.combo >= 5 ? "combo-glow" : "";
+  const showMetaLite = Boolean(flash);
+
+  const optionsHtml = question.options
+    .map((option, oi) => {
+      const isEliminated = !answered && run.eliminatedOptions?.includes(oi);
+      const isCorrect = answered && oi === question.answer;
+      const isWrongSelected = answered && oi === selectedChoice && oi !== question.answer;
+      const classes = [
+        "quiz-option",
+        isEliminated ? "is-eliminated" : "",
+        isCorrect ? "is-correct" : "",
+        isWrongSelected ? "is-wrong" : "",
+        isCorrect && selectedChoice === oi ? "celebrate" : ""
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `
+        <button class="${classes}" type="button" data-action="quiz-answer" data-choice="${oi}" ${answered || isEliminated ? "disabled" : ""}>
+          <span>${escapeHtml(option)}</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="quiz-shell minimal ${comboClass}">
+      <div class="quiz-head">
+        <div class="quiz-modes">
+          <button class="quiz-mode-btn ${state.quizEngine.mode === "pressure" ? "active" : ""}" type="button" data-action="quiz-mode" data-mode="pressure">Pressure</button>
+          <button class="quiz-mode-btn ${state.quizEngine.mode === "chill" ? "active" : ""}" type="button" data-action="quiz-mode" data-mode="chill">Chill</button>
+        </div>
+        <div class="quiz-progress">
+          <strong>${index + 1}/${questions.length}</strong>
+          <span>${progressPct}%</span>
+        </div>
+      </div>
+
+      ${flash ? `<div class="quiz-float ${flash.kind || ""}">${escapeHtml(flash.text)}</div>` : ""}
+
+      <div class="quiz-question-wrap">
+        <h3 class="quiz-question">${escapeHtml(question.q)}</h3>
+        ${
+          state.quizEngine.mode === "pressure"
+            ? `<div class="quiz-timer">⏱ <strong id="quiz-timer-value">${pressureSec}</strong>s</div>`
+            : ""
+        }
+        <small class="quiz-heatline">Question Heatmap: ${heat}% أخطأوا في هذا السؤال</small>
+      </div>
+
+      <div class="quiz-powerups">
+        <button class="ghost-btn" type="button" data-action="quiz-powerup" data-powerup="fifty" ${run.usedPowerups?.fifty ? "disabled" : ""}>حذف خيارين</button>
+        <button class="ghost-btn" type="button" data-action="quiz-powerup" data-powerup="hint" ${run.usedPowerups?.hint ? "disabled" : ""}>تلميح</button>
+      </div>
+
+      ${run.hintVisible ? `<p class="quiz-hint">${escapeHtml(getQuestionHint(question))}</p>` : ""}
+
+      <div class="quiz-options">${optionsHtml}</div>
+
+      ${
+        showMetaLite
+          ? `
+          <div class="quiz-meta-lite">
+            <small>Combo: ${state.quizEngine.combo}</small>
+            <small>Streak: ${state.quizEngine.streak}</small>
+            <small>Heatmap: ${heat}% أخطأوا</small>
+          </div>
+        `
+          : ""
+      }
+
+      ${
+        run.feedback
+          ? `
+          <div class="quiz-feedback ${run.feedback.type}">
+            <strong>${escapeHtml(run.feedback.title)}</strong>
+            <p>${escapeHtml(run.feedback.message)}</p>
+            ${
+              run.feedback.xpPreview
+                ? `<span class="quiz-xp-chip">+${run.feedback.xpPreview} XP</span>`
+                : ""
+            }
+            ${
+              run.feedback.type !== "correct"
+                ? `<button class="ghost-btn" type="button" data-action="quiz-toggle-explain">${run.showExplanation ? "إخفاء الشرح" : "عرض الشرح"}</button>`
+                : ""
+            }
+            ${
+              run.feedback.type !== "correct" && run.showExplanation
+                ? `<div class="quiz-explanation">${escapeHtml(getQuestionExplanation(question))}</div>`
+                : ""
+            }
+          </div>
+        `
+          : ""
+      }
+
+      <div class="quiz-actions">
+        <button class="quiz-btn" type="button" data-action="quiz-next" ${answered ? "" : "disabled"}>${index + 1 >= questions.length ? "إنهاء الجولة" : "السؤال التالي"}</button>
+      </div>
+    </div>
+  `;
+}
+
+function submitQuizAnswer(choice, options = {}) {
+  const unit = getSelectedUnit();
+  if (!unit || state.activeCorner !== "boss") return;
+  const run = state.quizEngine.run;
+  if (!run || run.finished || run.unitId !== unit.id) return;
+
+  const questions = getQuizQuestions(unit);
+  const index = run.questionIndex || 0;
+  if (!questions[index]) return;
+  if (Object.prototype.hasOwnProperty.call(run.answers || {}, index)) return;
+
+  const question = questions[index];
+  const isTimeout = options.timeout === true;
+  const isCorrect = !isTimeout && Number(choice) === Number(question.answer);
+  const elapsed = Math.max(200, Date.now() - (run.questionStartedAt || Date.now()));
+
+  run.answers[index] = isTimeout ? -1 : Number(choice);
+  run.responseTimes.push(elapsed);
+  updateQuestionHeat(getQuizQuestionKey(unit.id, index), isCorrect);
+
+  if (isCorrect) {
+    run.correctCount += 1;
+    const xpPreview = state.quizEngine.mode === "pressure" ? 14 : 10;
+    run.pendingBonusXp += xpPreview;
+    state.quizEngine.combo += 1;
+    state.quizEngine.streak += 1;
+    state.quizEngine.bestCombo = Math.max(state.quizEngine.bestCombo, state.quizEngine.combo);
+    run.feedback = {
+      type: "correct",
+      title: "إجابة صحيحة",
+      message: "ممتاز، حافظ على نفس الإيقاع.",
+      xpPreview
+    };
+    run.flash = {
+      kind: "ok",
+      text: state.quizEngine.combo > 1 ? `🔥 Combo x${state.quizEngine.combo}` : `+${xpPreview} XP`,
+      at: Date.now()
+    };
+    triggerHaptic("medium");
+    playQuizDing();
+  } else {
+    run.wrongCount += 1;
+    state.quizEngine.combo = 0;
+    state.quizEngine.streak = 0;
+    run.feedback = {
+      type: "wrong",
+      title: isTimeout ? "انتهى الوقت" : "إجابة خاطئة",
+      message: `الإجابة الأدق هي: ${question.options[question.answer] || ""}`
+    };
+    run.showExplanation = false;
+    run.flash = {
+      kind: "warn",
+      text: isTimeout ? "⏱ انتهى الوقت" : "انكسر الـ Combo",
+      at: Date.now()
+    };
+    triggerHaptic("heavy");
+  }
+
+  scheduleQuizFlashClear();
+  stopQuizTimer();
+  save(STORAGE_KEYS.quizHeatmap, state.quizHeatmap);
+  save(STORAGE_KEYS.quizEngine, state.quizEngine);
+  renderDetail();
+}
+
+function moveQuizNext() {
+  const unit = getSelectedUnit();
+  if (!unit) return;
+  const run = state.quizEngine.run;
+  if (!run || run.finished || run.unitId !== unit.id) return;
+
+  const index = run.questionIndex || 0;
+  const answered = Object.prototype.hasOwnProperty.call(run.answers || {}, index);
+  if (!answered) return;
+
+  const questions = getQuizQuestions(unit);
+  if (index >= questions.length - 1) {
+    finalizeQuizRun();
+    return;
+  }
+
+  run.questionIndex = index + 1;
+  run.questionStartedAt = Date.now();
+  run.deadlineAt = state.quizEngine.mode === "pressure" ? Date.now() + PRESSURE_QUESTION_SECONDS * 1000 : null;
+  run.feedback = null;
+  run.showExplanation = false;
+  run.hintVisible = false;
+  run.eliminatedOptions = [];
+  run.flash = null;
+  save(STORAGE_KEYS.quizEngine, state.quizEngine);
+  renderDetail();
+}
+
+function toggleQuizExplanation() {
+  const run = state.quizEngine.run;
+  if (!run || run.finished) return;
+  run.showExplanation = !run.showExplanation;
+  save(STORAGE_KEYS.quizEngine, state.quizEngine);
+  renderDetail();
+}
+
+function setQuizMode(mode) {
+  if (!["pressure", "chill"].includes(mode)) return;
+  if (state.quizEngine.mode === mode) return;
+  state.quizEngine.mode = mode;
+  showToast(mode === "pressure" ? "تم تفعيل Pressure Mode" : "تم تفعيل Chill Mode");
+  const unit = getSelectedUnit();
+  if (unit && state.activeCorner === "boss") {
+    startNewQuizRun();
+  } else {
+    save(STORAGE_KEYS.quizEngine, state.quizEngine);
+  }
+}
+
+function useQuizPowerup(type) {
+  const unit = getSelectedUnit();
+  const run = state.quizEngine.run;
+  if (!unit || !run || run.finished || run.unitId !== unit.id) return;
+  const index = run.questionIndex || 0;
+  if (Object.prototype.hasOwnProperty.call(run.answers || {}, index)) return;
+
+  const question = getQuizQuestions(unit)[index];
+  if (!question) return;
+
+  if (type === "fifty") {
+    if (run.usedPowerups?.fifty) return;
+    const wrongOptions = question.options
+      .map((_, oi) => oi)
+      .filter((oi) => oi !== question.answer);
+    run.eliminatedOptions = wrongOptions.slice(0, 2);
+    run.usedPowerups.fifty = true;
+    run.flash = { text: "✨ تم حذف خيارين", kind: "ok", at: Date.now() };
+  }
+
+  if (type === "hint") {
+    if (run.usedPowerups?.hint) return;
+    run.hintVisible = true;
+    run.usedPowerups.hint = true;
+    run.flash = { text: "💡 تلميح جاهز", kind: "ok", at: Date.now() };
+  }
+
+  scheduleQuizFlashClear();
+  save(STORAGE_KEYS.quizEngine, state.quizEngine);
+  renderDetail();
+}
+
+function updateQuestionHeat(key, isCorrect) {
+  const row = state.quizHeatmap[key] || { attempts: 0, wrong: 0 };
+  row.attempts += 1;
+  if (!isCorrect) row.wrong += 1;
+  state.quizHeatmap[key] = row;
+}
+
+function getQuestionHeatRate(key) {
+  const row = state.quizHeatmap[key];
+  if (!row || !row.attempts) return 0;
+  return Math.min(99, Math.round((row.wrong / row.attempts) * 100));
+}
+
+function finalizeQuizRun() {
+  const unit = getSelectedUnit();
+  const run = state.quizEngine.run;
+  if (!unit || !run || run.finished) return;
+
+  stopQuizTimer();
+  const questions = getQuizQuestions(unit);
+  const score = Math.max(0, Number(run.correctCount) || 0);
+  const total = Math.max(1, questions.length);
+  const percent = Math.round((score / total) * 100);
+
+  state.quizResults[unit.id] = { score, total, percent };
   save(STORAGE_KEYS.quiz, state.quizResults);
-  state.quizHistory.push({ unitId: unit.id, percent, at: new Date().toISOString() });
-  if (state.quizHistory.length > 120) {
-    state.quizHistory = state.quizHistory.slice(-120);
+
+  state.quizHistory.push({
+    unitId: unit.id,
+    percent,
+    score,
+    total,
+    mode: state.quizEngine.mode,
+    at: new Date().toISOString()
+  });
+  if (state.quizHistory.length > 150) {
+    state.quizHistory = state.quizHistory.slice(-150);
   }
   save(STORAGE_KEYS.quizHistory, state.quizHistory);
+
   if (percent === 100) {
     claimEventXP("quiz_100", unit.id, { enforceClaimWindow: false });
     registerProgressEvent("quiz_80_plus", { unitId: unit.id, trackId: state.trackId, percent });
@@ -1841,11 +2510,100 @@ function checkQuiz() {
   } else {
     registerProgressEvent("quiz_attempt", { unitId: unit.id, trackId: state.trackId, percent });
   }
-  showToast(`نتيجتك ${score}/${questions.length} (${percent}%)`);
+
+  let bonusXp = 0;
+  if (run.pendingBonusXp > 0) {
+    bonusXp += grantBonusXP(run.pendingBonusXp, "quiz_combo_bonus", unit.id, { silent: true });
+  }
+  if (state.quizEngine.mode === "pressure" && percent >= 80) {
+    bonusXp += grantBonusXP(35, "quiz_pressure_bonus", unit.id, { silent: true });
+  }
+
+  const avgMs = run.responseTimes.length
+    ? Math.round(run.responseTimes.reduce((sum, n) => sum + n, 0) / run.responseTimes.length)
+    : 0;
+  state.quizEngine.ghost = {
+    unitId: unit.id,
+    avgMs,
+    at: new Date().toISOString()
+  };
+
+  run.finished = true;
+  run.summary = { score, total, percent, bonusXp };
+  run.feedback = null;
+  run.flash = null;
+  state.quizEngine.lastSummary = { unitId: unit.id, score, total, percent, bonusXp, avgMs };
+  save(STORAGE_KEYS.quizEngine, state.quizEngine);
+
+  showToast(`نتيجتك ${score}/${total} (${percent}%) • +${bonusXp} XP`);
   renderChallenges();
   renderProfile();
   renderHome();
   renderDetail();
+}
+
+function getQuizRemainingSeconds(run) {
+  if (!run?.deadlineAt) return PRESSURE_QUESTION_SECONDS;
+  return Math.max(0, Math.ceil((run.deadlineAt - Date.now()) / 1000));
+}
+
+function startQuizTimer() {
+  stopQuizTimer();
+  if (state.page !== "curriculum" || state.activeCorner !== "boss") return;
+  if (state.quizEngine.mode !== "pressure") return;
+  const run = state.quizEngine.run;
+  if (!run || run.finished) return;
+  const index = run.questionIndex || 0;
+  if (Object.prototype.hasOwnProperty.call(run.answers || {}, index)) return;
+  if (!run.deadlineAt) {
+    run.deadlineAt = Date.now() + PRESSURE_QUESTION_SECONDS * 1000;
+    save(STORAGE_KEYS.quizEngine, state.quizEngine);
+  }
+
+  quizTimer = setInterval(() => {
+    if (state.page !== "curriculum" || state.activeCorner !== "boss") {
+      stopQuizTimer();
+      return;
+    }
+    const activeRun = state.quizEngine.run;
+    if (!activeRun || activeRun.finished) {
+      stopQuizTimer();
+      return;
+    }
+    const activeIndex = activeRun.questionIndex || 0;
+    if (Object.prototype.hasOwnProperty.call(activeRun.answers || {}, activeIndex)) {
+      stopQuizTimer();
+      return;
+    }
+
+    const remaining = getQuizRemainingSeconds(activeRun);
+    const timerEl = document.getElementById("quiz-timer-value");
+    if (timerEl) timerEl.textContent = String(remaining);
+
+    if (remaining <= 0) {
+      stopQuizTimer();
+      submitQuizAnswer(-1, { timeout: true });
+    }
+  }, 250);
+}
+
+function stopQuizTimer() {
+  if (!quizTimer) return;
+  clearInterval(quizTimer);
+  quizTimer = null;
+}
+
+function scheduleQuizFlashClear() {
+  if (quizFlashTimer) clearTimeout(quizFlashTimer);
+  quizFlashTimer = setTimeout(() => {
+    const run = state.quizEngine.run;
+    if (!run?.flash) return;
+    run.flash = null;
+    save(STORAGE_KEYS.quizEngine, state.quizEngine);
+    if (state.page === "curriculum" && state.activeCorner === "boss") {
+      renderDetail();
+    }
+  }, 1500);
 }
 
 function ensureDailyTasksState() {
@@ -2218,6 +2976,58 @@ function firstUnlockedUnit(track) {
   return track.units.find((_, index) => isUnitUnlocked(index));
 }
 
+function getUnitQuizQuestionsCount(unit) {
+  if (!unit) return 0;
+  if (unit.placeholderFor?.includes("boss")) return 0;
+  return Array.isArray(unit.content?.boss?.questions) ? unit.content.boss.questions.length : 0;
+}
+
+function isUnitUnlockedInTrack(trackId, index) {
+  const track = tracks.find((t) => t.id === trackId);
+  if (!track) return false;
+  if (index <= 0) return true;
+  return track.units.slice(0, index).every((unit) => state.completed.has(unit.id));
+}
+
+function findBestQuizTarget() {
+  const candidates = [];
+  const addCandidate = (trackId, unitId) => {
+    if (!trackId || !unitId) return;
+    candidates.push({ trackId, unitId });
+  };
+
+  addCandidate(state.trackId, state.selectedUnitId);
+  addCandidate(state.trackId, state.lastRead[state.trackId]);
+  Object.entries(state.lastRead).forEach(([trackId, unitId]) => addCandidate(trackId, unitId));
+
+  tracks.forEach((track) => {
+    track.units.forEach((unit, index) => {
+      if (isUnitUnlockedInTrack(track.id, index) && getUnitQuizQuestionsCount(unit) > 0) {
+        addCandidate(track.id, unit.id);
+      }
+    });
+  });
+
+  const seen = new Set();
+  for (const item of candidates) {
+    const key = `${item.trackId}:${item.unitId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const track = tracks.find((t) => t.id === item.trackId);
+    if (!track) continue;
+    const unitIndex = track.units.findIndex((unit) => unit.id === item.unitId);
+    if (unitIndex < 0) continue;
+    if (!isUnitUnlockedInTrack(item.trackId, unitIndex)) continue;
+
+    const unit = track.units[unitIndex];
+    if (getUnitQuizQuestionsCount(unit) === 0) continue;
+    return { trackId: item.trackId, unit };
+  }
+
+  return null;
+}
+
 function isUnitUnlocked(index) {
   if (index <= 0) return true;
   const units = getTrack().units;
@@ -2513,6 +3323,24 @@ function playRewardTone(type = "xp") {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
     osc.start(now);
     osc.stop(now + 0.2);
+  } catch {}
+}
+
+function playQuizDing() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(740, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(980, audioCtx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.07, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.16);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.16);
   } catch {}
 }
 

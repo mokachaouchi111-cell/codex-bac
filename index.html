@@ -32,19 +32,24 @@
       <div id="spa-stage" class="spa-stage">
         <section id="page-home" class="page active" data-page="home">
           <article class="home-hero glass">
-            <div>
+            <div class="home-hero-copy">
               <h2>مرحباً <span id="home-username">طالب CODEX-BAC</span></h2>
               <p>خريطة طريق البكالوريا أمامك بوضوح.</p>
+              <div id="home-hero-actions" class="home-hero-actions"></div>
             </div>
-            <div class="countdown-badge">
+            <div class="home-hero-side">
+              <div class="countdown-badge">
               <small>العد التنازلي للبكالوريا</small>
               <strong id="bac-countdown">--</strong>
+              </div>
+              <div id="home-hero-meta" class="home-hero-meta"></div>
             </div>
           </article>
 
           <section id="home-stats" class="home-stats"></section>
 
           <article id="home-last-read" class="home-last-read glass"></article>
+          <section id="home-portals" class="home-portals"></section>
         </section>
 
         <section id="page-curriculum" class="page" data-page="curriculum">
@@ -177,6 +182,8 @@
         <small>الملف</small>
       </button>
     </nav>
+
+    <button id="quick-quiz-fab" class="quick-quiz-fab" type="button" aria-label="فتح كويز سريع">⚡ كويز سريع</button>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

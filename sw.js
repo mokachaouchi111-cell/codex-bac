@@ -1,4 +1,4 @@
-const CACHE = "codex-bac-v9";
+const CACHE = "codex-bac-v12";
 const APP_SHELL = [
   "./",
   "./index.html",
